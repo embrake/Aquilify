@@ -8,14 +8,15 @@
 
 ---
 
-
 # Aquilify
 
 Aquilify is an ASGI (Asynchronous Server Gateway Interface) framework designed to facilitate the development of web applications with Python. It enables efficient handling of HTTP requests, WebSocket connections, middleware processing, and exception handling in an asynchronous environment.
 
 ## Introduction
 
-Aquilify leverages Python's async capabilities to provide a robust and scalable infrastructure for building web applications. It includes features such as request routing, middleware support, WebSocket handling, and response management.
+"Aquilify" epitomizes a Python ASGI framework crafted to encapsulate the agility, strength, and precision reminiscent of eagles. This framework symbolizes a software architecture meticulously engineered for adaptability, streamlined processing, and unwavering robustness, drawing inspiration from the remarkable traits associated with eagles in the natural world.
+
+Leveraging Python's asynchronous capabilities, Aquilify furnishes a resilient and expandable infrastructure tailored for crafting web applications. Offering an array of functionalities including request routing, seamless middleware support, WebSocket management, and proficient response handling, Aquilify is poised to empower developers in creating responsive and scalable web solutions.
 
 ## Why Choose Aquilify?
 
@@ -80,6 +81,7 @@ Aquilify only requires `anyio`, and the following are optional:
 * [`jinja2`][jinja2] - Required if you want to use `TemplateResponse`.
 * [`python-multipart`][python-multipart] - Required if you want to support form parsing, with `request.form()`.
 * [`itsdangerous`][itsdangerous] - Required for `SessionMiddleware` and `CSRF` support.
+* [`markupsafe`][markupsafe] - Required for `Jinja2` and `CSRF` support.
 
 You can install all of these with `pip3 install aquilify[full]`.
 

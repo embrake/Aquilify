@@ -8,7 +8,7 @@ with open('LICENSE', 'r', encoding='utf-8') as f:
 
 setup(
     name='aquilify',
-    version='1.10',
+    version='1.11',
     description="Aquilify is an ASGI (Asynchronous Server Gateway Interface) framework designed to facilitate the development of web applications with Python. It enables efficient handling of HTTP requests, WebSocket connections, middleware processing, and exception handling in an asynchronous environment.",
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -18,13 +18,14 @@ setup(
     packages=find_packages(),
     keywords=['web framework', 'Python web development', 'user-friendly', 'high-level', 'ASGI'],
     license='BSD-3-Clause',
-    install_requires=[], 
+    install_requires=['anyio'], 
     extras_require={
         'full': [
             'jinja2',
             'aiofiles',
             'python-multipart',
-            'itsdangerous'
+            'itsdangerous',
+            'markupsafe'
         ],
     }, 
     classifiers=[

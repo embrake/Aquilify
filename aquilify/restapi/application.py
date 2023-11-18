@@ -70,7 +70,7 @@ class Resource:
                     args = await self._argsparser(request)
                     return await handler(request, **args)
                 except ValueError as e:
-                    return Response(str(e), status_code=400)
+                    await handle_exception(e)
             else:
                 return MethodNotAllowed()
         except Exception as e:
@@ -87,6 +87,8 @@ class Resource:
 class Restful:
     def __init__(
         self,
+        api_name: Optional[str] = 'restful',
+        api_version: Optional[int] = 1.11,
         debug: bool = False,
         on_startup: Optional[Union[Callable[..., Awaitable[Any]], List[Callable[..., Awaitable[Any]]]]] = None,
         on_shutdown: Optional[Union[Callable[..., Awaitable[Any]], List[Callable[..., Awaitable[Any]]]]] = None,
@@ -128,6 +130,8 @@ class Restful:
             RequestStage.AFTER.value: []
         }
         self.debug: bool = debug
+        self.api_name = api_name,
+        self.api_version = api_version,
         self.exception_handlers = exception_handlers
 
         self._check_events(on_startup, on_shutdown)
@@ -163,9 +167,6 @@ class Restful:
                     path_params: Dict[str, str] = match.groupdict()
                     request.path_params = path_params
                     await self._execute_request_stage_handlers(RequestStage.BEFORE.value, request, context=context)
-                    response = await self.apply_middlewares(request, response)
-                    if not isinstance(response, (Response, Awaitable)):
-                        raise ValueError("Middleware must return a Response object or Awaitable[Response]")
                     if request.method in methods:
                         response = await methods[request.method](request, **request.path_params)
 
@@ -195,6 +196,9 @@ class Restful:
                 response = await self._error_validator(404, request)
 
             await self._execute_request_stage_handlers(RequestStage.AFTER.value, request, response, context=context)
+            response = await self.apply_middlewares(request, response)
+            if not isinstance(response, (Response, Awaitable)):
+                raise ValueError("Middleware must return a Response object or Awaitable[Response]")
 
         except Exception as e:
             response = await self._process_exception(e, request)

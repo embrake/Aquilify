@@ -58,7 +58,7 @@ class StaticMiddleware:
                         content: bytes = await self.get_file_content(static_path, request)
                         response.headers["Content-Type"] = mime
 
-                        if self.enable_gzip and "gzip" in await request.headers.get("accept-encoding", default=""):
+                        if self.enable_gzip and "gzip" in request.headers.get("accept-encoding", default=""):
                             content = await self.gzip_content(content)
                             response.headers["Content-Encoding"] = "gzip"
 
@@ -86,7 +86,7 @@ class StaticMiddleware:
         return response
 
     async def get_file_content(self, file_path: str, request: Request) -> bytes:
-        range_header: Optional[str] = await request.headers.get("Range")
+        range_header: Optional[str] = request.headers.get("Range")
         file_size: int = os.path.getsize(file_path)
         start, end = 0, file_size - 1
 
@@ -135,7 +135,7 @@ class StaticMiddleware:
 
     async def is_resource_not_modified(self, request: Request, response: Response) -> bool:
         etag: Optional[str] = response.headers.get("ETag")
-        return etag in await request.headers.get('If-None-Match', default="")
+        return etag in request.headers.get('If-None-Match', default="")
 
     async def handle_not_modified(self, response: Response) -> Response:
         response.status_code = 304

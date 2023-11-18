@@ -64,7 +64,7 @@ class CSRF:
         self.secret_key = secret_key
         self.expiration = expiration
         self.csrf_token_key = csrf_token_key
-        self.cookie_options = cookie_options or {"httponly": True, "secure": enforce_https}
+        self.cookie_options = cookie_options or {"httponly": True, "secure": enforce_https, "samesite": 'strict'}
         self.protected_methods = protected_methods
         self.logger = logger or logging.getLogger(__name__)
         self.token_length = token_length

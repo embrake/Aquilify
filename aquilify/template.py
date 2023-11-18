@@ -162,6 +162,8 @@ class TemplateResponse:
             token_name = self.csrf.csrf_token_key
             csrf_protect = lambda: Markup(f'<input name="{token_name}" type="hidden" value="{escape(token)}"></input>') if token else ''
 
+        csrf_protect = None
+        
         template = await asyncio.to_thread(self._get_template, template_name)
         context = self._inject_default_context(context)
         context = await self._add_url_generation(request, context, csrf_protect)
