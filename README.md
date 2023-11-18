@@ -4,7 +4,7 @@
 
 ---
 
-**Documentation**: [https://www.aquilify.vvfin.in/](https://www.aquilify.vvfin.in/)
+**Documentation**: [https://www.aquilify.vvfin.in/](http://aquilify.vvfin.in/)
 
 ---
 
