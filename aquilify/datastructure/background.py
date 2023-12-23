@@ -6,8 +6,8 @@ if sys.version_info >= (3, 10):  # pragma: no cover
 else:  # pragma: no cover
     from typing_extensions import ParamSpec
 
-from .._utils import is_async_callable
-from ..concurrency import run_in_threadpool
+from ..utils._utils import is_async_callable
+from ..utils.concurrency import run_in_threadpool
 
 P = ParamSpec("P")
 

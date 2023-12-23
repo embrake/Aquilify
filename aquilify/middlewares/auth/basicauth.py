@@ -2,7 +2,7 @@ import base64
 from aquilify.wrappers import Request, Response
 from typing import Optional, Dict, Any, Union
 
-class BasicAuthMiddleware:
+class BasicAuthBeforeStageHandler:
     def __init__(
         self,
         config: Optional[Dict[str, Any]] = None,
@@ -34,7 +34,7 @@ class BasicAuthMiddleware:
         auth_decoded = base64.b64decode(auth_header.split(' ')[1]).decode('utf-8')
         return tuple(auth_decoded.split(':', 1)) if ':' in auth_decoded else ('', '')
 
-    async def __call__(self, request: Request, response: Response) -> Response:
+    async def __call__(self, request: Request) -> Response:
         request.scope['user'] = None
         if self._should_apply_middleware(request):
             try:
@@ -51,8 +51,6 @@ class BasicAuthMiddleware:
             except Exception as e:
                 request.scope['user'] = None
                 return self._unauthorized_response()
-
-        return response
 
     def _should_apply_middleware(self, request: Request) -> bool:
         route = request.url.path

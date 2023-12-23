@@ -24,21 +24,18 @@ from ..wrappers import (
 )
 
 from ..responses import JsonResponse
+from ..settings.core import BaseMiddlewareSettings
 
 class StaticMiddleware:
     def __init__(
-        self,
-        static_folders: Optional[Dict[str, str]] = None,
-        cache_max_age: int = 3600,
-        enable_gzip: bool = True,
-        response_handler: Optional[Callable[[Response, str], Response]] = None,
-        chunk_size: int = 65536
+        self
     ) -> None:
-        self.static_folders: Dict[str, str] = static_folders if static_folders is not None else {'/static/': os.path.join(os.getcwd(), 'static')}
-        self.cache_max_age: int = cache_max_age
-        self.enable_gzip: bool = enable_gzip
-        self.response_handler: Optional[Callable[[Response, str], Response]] = response_handler
-        self.chunk_size: int = chunk_size
+        self.settings = BaseMiddlewareSettings().static_settings()
+        self.static_folders: Dict[str, str] = self.settings['static_folders']
+        self.cache_max_age: int = self.settings['cache_max_age']
+        self.enable_gzip: bool = self.settings['enable_gzip']
+        self.response_handler: Optional[Callable[[Response, str], Response]] = self.settings['response_handler']
+        self.chunk_size: int = self.settings['chunk_size']
 
     async def __call__(self, request: Request, response: Response) -> Union[Response, JsonResponse]:
         path: str = request.path

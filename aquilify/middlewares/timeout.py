@@ -3,14 +3,16 @@ from datetime import datetime
 from ..exception.base import GatewayTimeout
 from ..wrappers import Request, Response
 
+from ..settings.timeout import TimeoutConfigSettings
+
+_settings = TimeoutConfigSettings().fetch()
+
 class TimeoutMiddleware:
     def __init__(
-        self,
-        timeout_seconds: Optional[Union[int, float]] = 10,
-        timeout_response: Optional[Union[str, Callable[..., Response]]] = "Gateway Timeout"
+        self
     ):
-        self.timeout_seconds = timeout_seconds
-        self.timeout_response = timeout_response
+        self.timeout_seconds: Optional[Union[int, float]] = _settings.get('seconds') or 10
+        self.timeout_response: Optional[Union[str, Callable[..., Response]]] = _settings.get('response') or "Gateway Timeout"
 
     async def __call__(self, request: Request, response: Callable[..., Response]):
         start_time = datetime.now()

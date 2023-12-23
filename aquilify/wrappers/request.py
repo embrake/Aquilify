@@ -5,7 +5,7 @@ from urllib.parse import parse_qs
 
 import anyio
 
-from .._utils import AwaitableOrContextManager, AwaitableOrContextManagerWrapper
+from ..utils._utils import AwaitableOrContextManager, AwaitableOrContextManagerWrapper
 from ..datastructure.core import URL, Address, FormData, Headers, State
 from ..exception.http_exception import HTTPException
 from ..datastructure.formparser import FormParser, MultiPartException, MultiPartParser
@@ -15,10 +15,6 @@ try:
     from multipart.multipart import parse_options_header
 except ModuleNotFoundError: 
     parse_options_header = None
-
-
-if typing.TYPE_CHECKING:
-    from starlette.routing import Router
 
 
 SERVER_PUSH_HEADERS_TO_COPY = {
@@ -188,12 +184,6 @@ class HTTPConnection(typing.Mapping[str, typing.Any]):
             self._state = State(self.scope["state"])
         return self._state
 
-    def url_for(self, __name: str, **path_params: typing.Any) -> URL:
-        router: Router = self.scope["router"]
-        url_path = router.url_path_for(__name, **path_params)
-        return url_path.make_absolute_url(base_url=self.base_url)
-
-
 async def empty_receive() -> typing.NoReturn:
     raise RuntimeError("Receive channel has not been made available")
 
@@ -218,6 +208,7 @@ class Request(HTTPConnection):
         self.path_params = None
         self.query_params: typing.Dict[str, str] = {}
         self.context: typing.Dict[str, str] = {}
+        self.executed_middlewares = set()
 
     @property
     def method(self) -> str:

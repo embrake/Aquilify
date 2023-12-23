@@ -353,19 +353,7 @@ class Response:
             self.headers["Expires"] = expires_str
         except Exception as e:
             await handle_exception(e)
-
-    async def direct_passthrough(self):
-        try:
-            self.streaming = True
-        except Exception as e:
-            await handle_exception(e)
-
-    async def freeze(self):
-        try:
-            self.streaming = False
-        except Exception as e:
-            await handle_exception(e)
-
+            
     @property
     def location(self):
         return self.headers.get("Location")

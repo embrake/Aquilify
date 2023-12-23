@@ -1,6 +1,9 @@
 import logging
-from typing import List, Optional, Union, Callable, Dict, Set
+from typing import List, Optional
 from ..wrappers import Request, Response
+from ..settings.cors import CORSConfigSettings
+
+_settings = CORSConfigSettings().fetch()
 
 class CORS:
     """
@@ -70,37 +73,23 @@ class CORS:
             return {"message": "Hello, CORS!"}
             """
     def __init__(
-        self,
-        allow_origins: Union[List[str], Callable[[str], bool], Set[str]] = ['*'],
-        allow_methods: List[str] = ['GET', 'HEAD', 'POST', 'OPTIONS', 'PUT', 'PATCH', 'DELETE'],
-        allow_headers: Union[List[str], Callable[[str], bool], Set[str]] = ["*"],
-        expose_headers: Union[List[str], Set[str]] = set(),
-        allow_credentials: Union[bool, Callable[[str], bool]] = False,
-        max_age: int = 600,
-        security_headers: Dict[str, str] = None,
-        log_cors_requests: bool = True,
-        preflight_response: Callable[[Request], Optional[Response]] = None,
-        cache_preflight: bool = True,
-        response_handler: Callable[[Request, str, List[str]], Optional[Response]] = None,
-        origin_whitelist: Callable[[str], bool] = None,
-        automatic_preflight_handling: bool = True,
-        dynamic_headers_whitelist: Callable[[List[str]], List[str]] = None,
+        self
     ):
-        self.allow_origins = allow_origins
-        self.allow_methods = allow_methods
-        self.allow_headers = allow_headers
-        self.expose_headers = expose_headers
-        self.allow_credentials = allow_credentials
-        self.max_age = max_age
-        self.security_headers = security_headers or {}
-        self.log_cors_requests = log_cors_requests
-        self.preflight_response = preflight_response
-        self.preflight_cache = {}
-        self.cache_preflight = cache_preflight
-        self.custom_response_handler = response_handler
-        self.origin_whitelist = origin_whitelist
-        self.automatic_preflight_handling = automatic_preflight_handling
-        self.dynamic_headers_whitelist = dynamic_headers_whitelist
+        self.allow_origins = _settings.get('allowed_origin') or ["*"]
+        self.allow_methods = _settings.get('allowed_method') or ["*"]
+        self.allow_headers = _settings.get('allowed_headers') or ["*"]
+        self.expose_headers = _settings.get('expose_headers') or set()
+        self.allow_credentials = _settings.get('allowed_credentials') or False
+        self.max_age = _settings.get('max_age') or 600
+        self.security_headers = _settings.get('security_headers') or {}
+        self.log_cors_requests = _settings.get('log_request') or True
+        self.preflight_response = _settings.get('preflight_response') or None
+        self.preflight_cache = _settings.get('preflight_cache') or {}
+        self.custom_response_handler = _settings.get('response_handler') or None
+        self.origin_whitelist = _settings.get('origin_whitelist') or None
+        self.automatic_preflight_handling = _settings.get('automatic_preflight_handling') or True
+        self.dynamic_headers_whitelist = _settings.get('dynamic_headers_whitelist') or None
+        self.exclude_paths = _settings.get('exclude_paths') or []
 
     async def __call__(self, request: Request, response: Response):
         """
@@ -114,6 +103,9 @@ class CORS:
             Response: The modified HTTP response with CORS headers.
         """
         origin = request.origin
+
+        if request.path in self.exclude_paths:
+            return response
 
         if await self.is_origin_allowed(origin):
             if origin is not None:

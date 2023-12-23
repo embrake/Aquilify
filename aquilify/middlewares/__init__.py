@@ -1,29 +1,33 @@
 from .cors import CORS as CORSMiddleware
-from .limiter import Limiter as LimiterMiddleware
+from .limiter import RateLimiter as RateLimiterMiddleware
 from .static import StaticMiddleware
 from .dispatcher import Dispatcher
 from .profiler import AquilifyProfiler as Profiler
 from .csp import CSPMiddleware
 from .proxyfix import ProxyFix as ProxyFix
-from .sessions import SessionInterface
 from .httpsredirect import HTTPSRedirectMiddleware
 from .trustedhost import TrustedhostMiddleware
 from .gzip import GzipMiddleware
 from .logger import LoggingMiddleware
 from .timeout import TimeoutMiddleware
+from .compression import CompressionMiddleware
+from .xfameoption import XFrameOptionsMiddleware
+from .csrfmiddleware import CSRFMiddleware as CSRFMiddleware
 
 __all__ = [
     'CORSMiddleware',
-    'LimiterMiddleware',
+    'RateLimiterMiddleware',
     'StaticMiddleware',
     'Dispatcher',
     'Profiler',
     'CSPMiddleware',
     'ProxyFixer',
-    'SessionInterface',
     'HTTPSRedirectMiddleware',
     'TrustedhostMiddleware',
     'GzipMiddleware',
     'LoggingMiddleware',
     'TimeoutMiddleware',
+    'CompressionMiddleware',
+    'XFrameOptionsMiddleware',
+    'CSRFMiddleware'
 ]

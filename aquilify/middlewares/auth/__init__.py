@@ -1,1 +1,1 @@
-from .basicauth import BasicAuthMiddleware as BasicAuthMiddleware
+from .basicauth import BasicAuthBeforeStageHandler as BasicAuthBeforeStageHandler

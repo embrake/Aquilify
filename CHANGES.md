@@ -44,3 +44,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - Fixed import errors.
 - Fixed middleware exclusion.
 - Fixed `CSRF` middleware protecttion.
+
+## Version 1.12.0
+## # f0002
+## [1.12.0] - 2023-12-16
+
+### Added
+
+- Robust HTTP routing handling
+- Batteries-included middlestack framework
+- View-based routing
+- Jinja2 template rendering
+- Pre-included middlewares
+- Manage Aquilify app using settings.py
+
+## Version 1.13.0
+## # f0002
+## [1.13.0] - 2023-12-18
+
+# Fixed 
+
+- Minor bug fixes.
+- Resloved import error.

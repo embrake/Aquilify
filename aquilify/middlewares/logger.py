@@ -4,38 +4,30 @@ import os
 from logging.handlers import TimedRotatingFileHandler
 from typing import Optional
 
+from ..settings.logger import LoggingConfigSettings
+
+_settings = LoggingConfigSettings().fetch()
+
 class LoggingMiddleware:
     def __init__(
-        self,
-        log_file_path: Optional[str] = None,
-        log_user_agent: bool = True,
-        log_client_ip: bool = True,
-        log_format: Optional[str] = None,
-        max_log_size: int = 10 * 1024 * 1024,  # 10MB default max log file size
-        backup_count: int = 5,  # Default backup count for log files
-        log_level: int = logging.INFO,  # Default log level is INFO
-        output_stream: Optional[str] = 'file',  # Default output to log file
-        append_logs: bool = False,  # Overwrite logs by default
-        timestamp_format: Optional[str] = "%Y-%m-%d %H:%M:%S",  # Default timestamp format
-        log_response_time: bool = True,  # Log response times
-        url_patterns_to_log: Optional[list] = None,  # List of URL patterns to log
+        self
     ):
-        self.log_file_path = log_file_path
-        self.log_user_agent = log_user_agent
-        self.log_client_ip = log_client_ip
-        self.max_log_size = max_log_size
-        self.backup_count = backup_count
-        self.log_level = log_level
-        self.output_stream = output_stream
-        self.append_logs = append_logs
-        self.timestamp_format = timestamp_format
-        self.log_response_time = log_response_time
-        self.url_patterns_to_log = url_patterns_to_log or []
+        self.log_file_path = _settings.get('file_path') or None
+        self.log_user_agent = _settings.get('user_agent') or True
+        self.log_client_ip = _settings.get('client_ip') or True
+        self.max_log_size = _settings.get('log_size') or 10 * 1024 * 1024
+        self.backup_count = _settings.get('backup_count') or 5
+        self.log_level = _settings.get('log_level') or logging.INFO
+        self.output_stream = _settings.get('output_stream') or 'file'
+        self.append_logs = _settings.get('append_logs') or False
+        self.timestamp_format = _settings.get('timestamp_format') or "%Y-%m-%d %H:%M:%S"
+        self.log_response_time = _settings.get('log_response_time') or True
+        self.url_patterns_to_log = _settings.get('url_patterns_to_log') or []
 
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(log_level)
+        self.logger.setLevel(logging.INFO)
 
-        self._setup_logging(log_format)
+        self._setup_logging(_settings.get('log_format') or None)
 
     def _setup_logging(self, log_format: Optional[str]):
         log_formatter = log_format or '%(asctime)s - %(levelname)s - %(message)s'

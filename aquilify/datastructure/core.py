@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from shlex import shlex
 from urllib.parse import SplitResult, parse_qsl, urlencode, urlsplit
 
-from ..concurrency import run_in_threadpool
+from ..utils.concurrency import run_in_threadpool
 from ..types import Scope
 
 

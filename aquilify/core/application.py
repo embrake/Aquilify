@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import asyncio
-import re
-import random
 import json
 import inspect
+import warnings
 import traceback
 import xml.etree.ElementTree as ET
 
@@ -41,6 +39,13 @@ from ..exception.base import (
     InternalServerError
 )
 
+from ..exception.debug import (
+    debug_404,
+    debug_405
+)
+
+from ..views.urlI8N import urlI8N
+
 from ..types import (
     ASGIApp,
     Scope,
@@ -50,14 +55,25 @@ from ..types import (
     StatefulLifespan
 )
 
+from ..utils.reqparser import Reqparser
 from ..exception.__handler import handle_exception
 from ..config import Config
-from ..schematic import Schematic
-from .__globals import Converter
+from .schematic import Schematic
+from .__globals import (
+    Converter,
+    routing,
+    BaseSettings,
+    StageHandler,
+    fetchSettingsMiddleware
+)
+
+from ..responses import HTMLResponse
 
 from .__status import exception_dict
 
 T = TypeVar("T")
+
+_settings = BaseSettings().compator()
 
 class RequestStage(Enum):
     BEFORE: str = 'before'
@@ -77,20 +93,7 @@ class ColoursCode:
 
 class Aquilify:
     def __init__(
-        self,
-        debug: bool = False,
-        config: Callable[..., Awaitable[Union[str, dict, bytes, Any[Config]]]] = Config(),
-        on_startup: Optional[Union[Callable[..., Awaitable[Any]], List[Callable[..., Awaitable[Any]]]]] = None,
-        on_shutdown: Optional[Union[Callable[..., Awaitable[Any]], List[Callable[..., Awaitable[Any]]]]] = None,
-        exception_handlers: Optional[
-            Mapping[
-                Any,
-                Callable[
-                    [Request, Exception],
-                    Union[Response, Awaitable[Response]],
-                ],
-            ]
-        ] = None,
+        self
         ) -> None:
 
         self.routes: List[
@@ -129,17 +132,29 @@ class Aquilify:
         self.grouped_request_stages: Dict[str, Dict[str, List[Callable]]] = {}
         self.error_handlers: Dict[str, Dict[str, List[Callable]]] = {}
         self.excluded_stages: Dict[str, List[Callable]] = {}
-        self.config: Callable[..., Awaitable[T, Config, Union[str, dict, bytes, Any]]] = config,
+        self.config: Callable[..., Awaitable[T, Config, Union[str, dict, bytes, Any]]] = None,
         self.request_stage_handlers: Dict[str, List[Tuple[Callable[..., Awaitable[None]], int, Optional[Callable]]]] = {
             RequestStage.BEFORE.value: [], 
             RequestStage.AFTER.value: []
         }
+        self.on_startup: Optional[Union[Callable[..., Awaitable[Any]], List[Callable[..., Awaitable[Any]]]]] = None,
+        self.on_shutdown: Optional[Union[Callable[..., Awaitable[Any]], List[Callable[..., Awaitable[Any]]]]] = None,
 
-        self.debug: bool = debug
+        self.debug: bool = _settings or False
         self.schematic_id: Optional[str] = None
         self.schematic: Callable[..., Awaitable[T]] = None
-        self._check_events(on_startup, on_shutdown)
-        self.exception_handlers = exception_handlers
+        self.exception_handlers: Optional[
+            Mapping[
+                Any,
+                Callable[
+                    [Request, Exception],
+                    Union[Response, Awaitable[Response]],
+                ],
+            ]
+        ] = None
+        self.settings_stage_handler = StageHandler()
+        self.settings_stage_handler.process_stage_handlers(self)
+        fetchSettingsMiddleware(self)
 
     def errorhandler(self, status_code: int) -> Callable:
         def decorator(handler: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
@@ -155,13 +170,25 @@ class Aquilify:
         endpoint: Optional[str] = None,
         strict_slashes: bool = True,
     ) -> Callable[..., Awaitable[T]]:
+        """
+        We no longer document this decorator style API, and its usage is discouraged.
+        Instead you should use the following approach:
+
+        >>> ROUTING = [
+                routing.route('/', methods=['GET', 'POST'], endpoint=home)
+            ]
+        """
+        warnings.warn(
+            "The `route` decorator is deprecated, and will be removed in version 1.12. ",  # noqa: E501
+            DeprecationWarning,
+        )
         allowed_methods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE"]
         try:
             if not path.startswith('/'):
                 raise TypeError("Websocket paths must startwith '/'.")
             if methods is not None:
                 for method in methods:
-                    if method not in allowed_methods:
+                    if method.upper() not in allowed_methods:
                         raise ValueError(f"Invalid HTTP method provided: {method}")
 
             if methods is None:
@@ -192,21 +219,47 @@ class Aquilify:
             if self.debug:
                 print(e)
             else:
-                InternalServerError()
+                raise InternalServerError
+            
+    def _helper_route_setup(self):
+        for route in routing._routes:
+            path, methods, handler, strict_slashes, response_model, endpoint = route
+
+            self.routes.append(
+                (
+                    path,
+                    methods,
+                    handler,
+                    strict_slashes,
+                    response_model,
+                    endpoint,
+                )
+            )
     
     def add_route(
         self,
         path: str,
         methods: Optional[List[str]] = None,
         response_model: Optional[Type[T]] = None,
-        endpoint: Optional[str] = None,
-        strict_slashes: bool = True,
-        handler: Optional[Callable[..., Awaitable[T]]] = None
+        endpoint: Optional[Callable[..., Awaitable[T]]] = None,
+        strict_slashes: bool = True
     ) -> None:
-        if handler is None:
+        """
+        We no longer document this add_route style API, and its usage is discouraged.
+        Instead you should use the following approach:
+
+        >>> ROUTING = [
+                routing.route('/', methods=['GET', 'POST'], endpoint=home)
+            ]
+        """
+        warnings.warn(
+            "The `add_route` is deprecated, and will be removed in version 1.12. ",  # noqa: E501
+            DeprecationWarning,
+        )
+        if endpoint is None:
             raise ValueError("Handler function is required for adding a route.")
         
-        if not (inspect.iscoroutinefunction(handler) or inspect.isasyncgenfunction(handler)):
+        if not (inspect.iscoroutinefunction(endpoint) or inspect.isasyncgenfunction(endpoint)):
             raise TypeError("ASGI can only register asynchronous functions.")
 
         if not path.startswith('/'):
@@ -215,7 +268,7 @@ class Aquilify:
         if methods is not None:
             allowed_methods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE"]
             for method in methods:
-                if method not in allowed_methods:
+                if method.upper() not in map(str.upper, allowed_methods):
                     raise ValueError(f"Invalid HTTP method provided: {method}")
 
         if methods is None:
@@ -224,6 +277,7 @@ class Aquilify:
         converted_path, path_regex = Converter()._regex_converter(
             path, strict_slashes, ''
         )
+        handler = endpoint
         self.routes.append(
             (
                 converted_path,
@@ -240,6 +294,18 @@ class Aquilify:
         path: str,
         handler: Optional[Callable[..., Awaitable[T]]] = None
     ) -> None:
+        """
+        We no longer document this add_websocket_route style API, and its usage is discouraged.
+        Instead you should use the following approach:
+
+        >>> ROUTING = [
+                routing.websocket('/ws', endpoint=func)
+            ]
+        """
+        warnings.warn(
+            "The `add_websocket_route` is deprecated, and will be removed in version 1.12. ",  # noqa: E501
+            DeprecationWarning,
+        )
         if handler is None:
             raise ValueError("Handler function is required for adding a websocket route.")
         
@@ -354,11 +420,11 @@ class Aquilify:
     def include(
         self,
         schematic: Dict[str, Schematic[ASGIApp]],
-        middlewares: Optional[bool] = False
+        include_middlewares: Optional[bool] = False
     ) -> None:
         for url_prefix, schematic_instance in schematic.items():
             self._process_routes(schematic_instance, url_prefix)
-            if middlewares:
+            if include_middlewares:
                 self._add_middlewares(schematic_instance)
             self._process_schematic_instance(schematic_instance, url_prefix)
 
@@ -474,7 +540,7 @@ class Aquilify:
             return middleware_func
         return decorator
 
-    def add_middleware(
+    def add_middleware( 
         self,
         middleware: Callable[..., Awaitable[T]],
         order: Optional[int] = 0,
@@ -546,7 +612,14 @@ class Aquilify:
         context: Dict[str, List[Callable[..., Awaitable[T]]]] = {}
 
         try:
+            self._helper_route_setup()
             allowed_methods = set()
+
+            if not self.routes:
+                if self.debug:
+                    response = HTMLResponse(urlI8N())
+                else:
+                    response = HTMLResponse("<h1>Welcome to Aquilify, Your installation successful.</h1><p>You have debug=False in you Aquilify settings, change it to True in use of development for better experiance.")
             for (
                 route_pattern,
                 methods,
@@ -557,16 +630,12 @@ class Aquilify:
             ) in self.routes:
                 match = path_regex.match(path)
                 if match:
-                    if not methods or method in methods:
+                    if not methods or method.upper() in map(str.upper, methods):
                         path_params = match.groupdict()
                         processed_path_params = {key: self._convert_value(value) for key, value in path_params.items()}
                         request.path_params = processed_path_params
 
                         await self._execute_request_stage_handlers(RequestStage.BEFORE.value, request, context=context)
-                        
-                        res = await self.apply_middlewares(request, response = Response())
-                        if not isinstance(res, (Response, Awaitable)):
-                            raise ValueError("Middleware must return a Response object or Awaitable[Response]")
 
                         await self._context_processer(request)
                         scope['context'] = request.context ## context manager ..., Awaitable
@@ -577,7 +646,16 @@ class Aquilify:
                         handler_params = inspect.signature(handler).parameters
 
                         if 'request' in handler_params:
-                            response = await handler(request, **request.path_params)
+                            parser = Reqparser()
+
+                            if 'parser' in handler_params:
+                                response = await handler(request, parser=parser, **request.path_params)
+                            else:
+                                if request.path_params:
+                                    valid_path_params = {key: value for key, value in request.path_params.items() if key in handler_params}
+                                    response = await handler(request, **valid_path_params)
+                                else:
+                                    response = await handler(request)
                         else:
                             handler_kwargs = {param.name: request.path_params[param.name] for param in handler_params.values() if param.name in request.path_params}
 
@@ -720,9 +798,16 @@ class Aquilify:
                 received_type = type(response).__name__
                 expected_types = ", ".join([typ.__name__ for typ in [str, dict, Response]])
                 raise HTTPException(f"Invalid response type: Received {received_type}. Expected types are {expected_types}")
-
+        
         if error_code in exception_dict:
-            return exception_dict[error_code]()
+            if error_code == 404 and self.debug:
+                request: Request = args[0]
+                return Response(debug_404(routing._links, { 'path': request.path, 'client_ip': request.remote_addr, 'user_agent': request.user_agent, 'url': request.url, 'method': request.method }), 404, content_type='text/html')
+            elif error_code == 405 and self.debug:
+                request: Request = args[0]
+                return Response(debug_405({ 'method': request.method, "url": request.url, "client_ip": request.remote_addr, "user_agent": request.user_agent, "allowed_method": args[1]}), 405, content_type='text/html')
+            else:
+                return exception_dict[error_code]()
         else:
             raise TypeError('Unsupported error type! : {}'.format(error_code))
 
@@ -739,6 +824,18 @@ class Aquilify:
         self,
         path: str
     ) -> Callable[..., Awaitable[T]]:
+        """
+        We no longer document this decorator style API, and its usage is discouraged.
+        Instead you should use the following approach:
+
+        >>> ROUTING = [
+                routing.websocket('/ws', endpoint=func)
+            ]
+        """
+        warnings.warn(
+            "The `decorator` is deprecated, and will be removed in version 1.12. ",  # noqa: E501
+            DeprecationWarning,
+        )
         def decorator(
             handler: Callable[..., Awaitable[T]]
         ) -> Callable[..., Awaitable[T]]:
@@ -761,6 +858,7 @@ class Aquilify:
         ws = WebSocket(scope, receive, send)
         try:
             await self._websocket_routes(ws)
+            await self._helper_websocket_routes(ws)
         except WebSocketDisconnect as e:
             await ws.close(code=e.code, reason=e.reason)
         except RuntimeError as e:
@@ -777,6 +875,18 @@ class Aquilify:
 
     async def _websocket_routes(self, ws: WebSocket) -> None:
         for path, path_regex, handler in self.websockets:
+            match = path_regex.match(ws.path)
+            if match:
+                ws.path_params = match.groupdict()
+                response = await handler(ws, **ws.path_params)
+                if not isinstance(response, WebSocket):
+                    received_type = type(response).__name__
+                    expected_types = ", ".join([typ.__name__ for typ in [WebSocket]])
+                    raise TypeError(f"Invalid response type: Received {received_type}. Expected types are {expected_types}.")
+                return response
+            
+    async def _helper_websocket_routes(self, ws: WebSocket) -> None:
+        for path, path_regex, handler in routing._websockets:
             match = path_regex.match(ws.path)
             if match:
                 ws.path_params = match.groupdict()

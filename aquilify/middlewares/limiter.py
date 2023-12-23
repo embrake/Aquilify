@@ -1,57 +1,42 @@
 import time
 from typing import Callable, Awaitable, Dict, List, Optional, Tuple
 from ..wrappers import Request, Response
+from ..settings.ratelimit import RateLimitConfigSettings
+from ..exception.base import TooManyRequests
 
-class Limiter:
+_settings = RateLimitConfigSettings().fetch()
+
+class RateLimiter:
     def __init__(
-        self,
-        limit: int,
-        window: int,
-        exempt_paths: List[str] = [],
-        custom_headers: Dict[str, str] = {},
-        dynamic_limits: Dict[str, Callable[[int, int], Tuple[int, int]]] = {},
-        concurrency_control: bool = False,
-        rate_limit_expiry: Dict[str, int] = {},
-        monitoring_callback: Optional[Callable[[str, int, int, int], Awaitable[None]]] = None,
-        whitelist: List[str] = [],
-        blacklist: List[str] = [],
-        rate_limit_by_endpoint: Dict[str, Tuple[int, int]] = {},
-        rate_limit_adjustments: Dict[str, Callable[[int, int], Tuple[int, int]]] = {},
-        rate_limit_expiry_policies: Dict[str, Callable[[int, int], int]] = {},
-        ip_rate_limits: Dict[str, Tuple[int, int]] = {},
-        rate_limit_bypass_tokens: Dict[str, List[str]] = {},
-        advanced_monitoring_and_reporting: Optional[Callable[[str, int, int, int], Awaitable[None]]] = None,
-        granular_rate_limits: Dict[str, Tuple[int, int]] = {},
-        automated_rate_limit_adjustment: Optional[Callable[[str, int, int], Awaitable[Tuple[int, int]]]] = None,
-        granular_rate_limit_callback: Optional[Callable[[str, str], Awaitable[Tuple[int, int]]]] = None,
+        self
     ):
-        self.default_limit = limit
-        self.default_window = window
-        self.exempt_paths = exempt_paths
-        self.custom_headers = custom_headers
-        self.dynamic_limits = dynamic_limits
-        self.concurrency_control = concurrency_control
-        self.rate_limit_expiry = rate_limit_expiry
-        self.monitoring_callback = monitoring_callback
-        self.whitelist = whitelist
-        self.blacklist = blacklist
+        self.default_limit: int = _settings.get('limit') or 60
+        self.default_window: int = _settings.get('window') or 60
+        self.exempt_paths: List[str] = _settings.get('exempt_paths') or []
+        self.custom_headers: Dict[str, str] = _settings.get('headers') or {}
+        self.dynamic_limits: Dict[str, Callable[[int, int], Tuple[int, int]]] = _settings.get('dynamic_limits') or {}
+        self.concurrency_control: bool = _settings.get('concurrency_control') or False
+        self.rate_limit_expiry: Dict[str, int] = _settings.get('expiry') or {}
+        self.monitoring_callback: Optional[Callable[[str, int, int, int], Awaitable[None]]] = _settings.get('monitoring_callback') or None
+        self.whitelist: List[str] = _settings.get('whitelist') or []
+        self.blacklist: List[str] = _settings.get('blacklist') or []
         self.requests: Dict[str, List[float]] = {}
         self.concurrent_requests: Dict[str, int] = {}
-        self.rate_limit_by_endpoint = rate_limit_by_endpoint
-        self.rate_limit_adjustments = rate_limit_adjustments
-        self.rate_limit_expiry_policies = rate_limit_expiry_policies
-        self.ip_rate_limits = ip_rate_limits
-        self.rate_limit_bypass_tokens = rate_limit_bypass_tokens
-        self.advanced_monitoring_report = advanced_monitoring_and_reporting
-        self.granular_rate_limits = granular_rate_limits
-        self.automated_rate_limit_adjustment = automated_rate_limit_adjustment
-        self.granular_rate_limit_callback = granular_rate_limit_callback
+        self.rate_limit_by_endpoint: Dict[str, Tuple[int, int]] = _settings.get('endpoint') or {}
+        self.rate_limit_adjustments: Dict[str, Callable[[int, int], Tuple[int, int]]] = _settings.get('adjustments') or {}
+        self.rate_limit_expiry_policies: Dict[str, Callable[[int, int], int]] = _settings.get('expiry_policies') or {}
+        self.ip_rate_limits: Dict[str, Tuple[int, int]] = _settings.get('ip_rate_limits') or {}
+        self.rate_limit_bypass_tokens: Dict[str, List[str]] = _settings.get('bypass_token') or {}
+        self.advanced_monitoring_report: Optional[Callable[[str, int, int, int], Awaitable[None]]] = _settings.get('advance_monitoring_and_reporting') or None
+        self.granular_rate_limits: Dict[str, Tuple[int, int]] = _settings.get('granular') or {}
+        self.automated_rate_limit_adjustment: Optional[Callable[[str, int, int], Awaitable[Tuple[int, int]]]] = _settings.get('automated_adjustments') or None
+        self.granular_rate_limit_callback: Optional[Callable[[str, str], Awaitable[Tuple[int, int]]]] = _settings.get('granular_callback') or None
         self.cache_size = 1000 
         self.rate_limit_cache = {}
         self.rate_limits = {}
 
     async def __call__(self, request: Request, response: Response) -> Response:
-        client_ip: str = await request.remote_addr
+        client_ip: str = request.remote_addr
         current_time: float = time.time()
         endpoint: str = request.path
 
@@ -62,7 +47,7 @@ class Limiter:
         limit, window = self.apply_rate_limit_adjustments(client_ip, endpoint, limit, window)
 
         if self.is_concurrency_control_enabled(client_ip) and self.is_concurrency_exceeded(client_ip):
-            return Response(status_code=429, content="Concurrency limit exceeded")
+            return TooManyRequests('Concurrency limit exceeded')
 
         if not self.track_request(client_ip, current_time, window, limit):
             error_response = self.create_rate_limit_exceeded_response(client_ip, limit, window, current_time)
@@ -92,7 +77,7 @@ class Limiter:
         return client_ip in self.whitelist
 
     async def is_bypass_token(self, request: Request) -> bool:
-        token = await request.headers.get("x-bypass-token")
+        token = request.headers.get("x-bypass-token")
         return any(token in tokens for tokens in self.rate_limit_bypass_tokens.values())
 
     def get_rate_limit(self, client_ip: str, endpoint: str) -> Tuple[int, int]:
@@ -154,7 +139,7 @@ class Limiter:
     def create_rate_limit_exceeded_response(
         self, client_ip: str, limit: int, window: int, current_time: float
     ) -> Response:
-        error_response = Response(status_code=429, content="Rate limit exceeded")
+        error_response = TooManyRequests("Limit Exceeded")
         for header, value in self.custom_headers.items():
             error_response.headers[header] = value
         error_response.headers['X-RateLimit-Limit'] = str(limit)

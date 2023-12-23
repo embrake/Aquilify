@@ -7,71 +7,48 @@ from typing import Dict, Union, List, Optional
 
 from ..wrappers import Request, Response
 from ..exception.__handler import handle_exception
+from ..responses import HTMLResponse
+from ..settings.csp import CSPConfigSettings
+
+_settings = CSPConfigSettings().fetch()
 
 class CSPMiddleware:
     def __init__(
-        self,
-        csp_directives: Dict[str, Union[str, List[str]]],
-        report_uri: str = '',
-        report_only: bool = False,
-        enable_violation_handling: bool = False,
-        report_sample_weight: float = 0.0,
-        violation_report_endpoint: str = '/violation-report',
-        log_file_path: str = 'csp_violation_reports.log',
-        security_headers: Dict[str, str] = None,
-        nonce_length: int = 16,
-        nonce_algorithm: str = 'sha256',
-        referrer_policy: str = 'strict-origin-when-cross-origin',
-        hsts_max_age: int = 31536000,
-        hsts_include_subdomains: bool = True,
-        hsts_preload: bool = False,
-        feature_policy: Optional[Dict[str, str]] = None,
-        x_content_type_options: str = 'nosniff',
-        x_frame_options: str = 'DENY',
-        x_xss_protection: str = '1; mode=block',
-        expect_ct: Optional[str] = None,
-        cross_origin_opener_policy: Optional[str] = None,
-        cross_origin_embedder_policy: Optional[str] = None,
-        force_https: bool = False,
-        referrer_policy_feature: bool = False,
-        referrer_policy_no_referer: bool = False,
-        referrer_policy_no_referrer_when_downgrade: bool = False,
+        self
     ) -> None:
-        self.csp_directives = csp_directives
-        self.report_uri = report_uri
-        self.report_only = report_only
-        self.enable_violation_handling = enable_violation_handling
-        self.report_sample_weight = report_sample_weight
-        self.violation_report_endpoint = violation_report_endpoint
-        self.log_file_path = Path(log_file_path)
-        self.security_headers = security_headers or {}
+        self.csp_directives = _settings.get('csp_directives') or { 'default-src': ["'self'"] }
+        self.report_uri = _settings.get('report_uri') or ''
+        self.report_only = _settings.get('report_only') or False
+        self.enable_violation_handling = _settings.get('enable_violation_handling') or False
+        self.report_sample_weight = _settings.get('report_sample_weight') or 0.0
+        self.violation_report_endpoint = _settings.get('violation_report_endpoint') or '/violation-report'
+        self.log_file_path = Path(_settings.get('log_file_path')) or Path('csp_violation_reports.log')
+        self.security_headers = _settings.get('security_headers') or {}
         self._setup_violation_log_file()
         self.logger = self._setup_logging()
         self.violation_reports = [],
-        self.nonce_length: int = nonce_length
-        self.nonce_algorithm: str = nonce_algorithm
-        self.referrer_policy: str = referrer_policy
-        self.hsts_max_age: int = hsts_max_age
-        self.hsts_include_subdomains: bool = hsts_include_subdomains
-        self.hsts_preload: bool = hsts_preload
-        self.feature_policy: Dict[str, str] = feature_policy if feature_policy else {}
-        self.x_content_type_options: str = x_content_type_options
-        self.x_frame_options: str = x_frame_options
-        self.x_xss_protection: str = x_xss_protection
-        self.expect_ct: Optional[str] = expect_ct
-        self.cross_origin_opener_policy: Optional[str] = cross_origin_opener_policy
-        self.cross_origin_embedder_policy: Optional[str] = cross_origin_embedder_policy
-        self.force_https: bool = force_https
-        self.referrer_policy_feature: bool = referrer_policy_feature
-        self.referrer_policy_no_referer: bool = referrer_policy_no_referer
-        self.referrer_policy_no_referrer_when_downgrade: bool = referrer_policy_no_referrer_when_downgrade
+        self.nonce_length: int = _settings.get('nonce_length') or 16
+        self.nonce_algorithm: str = _settings.get('nonce_algorithm') or 'sha256'
+        self.referrer_policy: str = _settings.get("referrer_policy") or 'strict-origin-when-cross-origin'
+        self.hsts_max_age: int = _settings.get('hsts_max_age') or 31536000
+        self.hsts_include_subdomains: bool = _settings.get('hsts_include_subdomains') or True
+        self.hsts_preload: bool = _settings.get('hsts_preload') or False
+        self.feature_policy: Dict[str, str] = _settings.get('feature_policy') or {}
+        self.x_content_type_options: str = _settings.get('x_content_type_options') or 'nosniff'
+        self.x_frame_options: str = _settings.get('x_frame_options') or 'DENY'
+        self.x_xss_protection: str = _settings.get('x_xss_protection') or '1; mode=block'
+        self.expect_ct: Optional[str] = _settings.get('expect_ct') or None
+        self.cross_origin_opener_policy: Optional[str] = _settings.get('cross_origin_opener_policy') or None
+        self.cross_origin_embedder_policy: Optional[str] = _settings.get('cross_origin_embedder_policy') or None
+        self.force_https: bool = _settings.get('force_https') or False
+        self.referrer_policy_feature: bool = _settings.get('referrer_policy_feature') or False
+        self.referrer_policy_no_referer: bool = _settings.get('referrer_policy_no_referer') or False
+        self.referrer_policy_no_referrer_when_downgrade: bool = _settings.get('referrer_policy_no_referrer_when_downgrade') or False
 
     async def __call__(self, request: Request, response: Response) -> Response:
         try:
-            if self.force_https and await request.scheme() != "https":
-                    response.status_code = 400
-                    response.content = "<h1>400 | Bad Request - HTTPS Required!</h1>"
-                    response.content_type = 'text/html'
+            if self.force_https and request.scheme != "https":
+                    response = HTMLResponse('<h1>Bad Request | HTTPS Connection Required | 400</h1>', status=400)
                     return response
             
             if self._is_violation_report_request(request):
@@ -89,6 +66,8 @@ class CSPMiddleware:
             if self.cross_origin_embedder_policy:
                 response['headers']["Cross-Origin-Embedder-Policy"] = self.cross_origin_embedder_policy
 
+            response.headers["Referrer-Policy"] = self.referrer_policy
+
             if self.referrer_policy_feature:
                 response.headers["Referrer-Policy"] = self.referrer_policy + ", " + "features"
 
@@ -97,8 +76,7 @@ class CSPMiddleware:
 
             if self.referrer_policy_no_referrer_when_downgrade:
                 response.headers["Referrer-Policy"] = self.referrer_policy + ", " + "no-referrer-when-downgrade"
-
-            response.headers["Referrer-Policy"] = self.referrer_policy
+                
             hsts_directive = f"max-age={self.hsts_max_age}"
             if self.hsts_include_subdomains:
                 hsts_directive += "; includeSubDomains"

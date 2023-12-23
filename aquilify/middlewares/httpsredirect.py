@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from ..types import ASGIApp
 from ..wrappers import Request, Response
+from ..settings.httpsredirect import HTTPSConfigSettings
+
+_settings = HTTPSConfigSettings().fetch()
 
 class HTTPSRedirectMiddleware:
-    def __init__(self, app: ASGIApp, strict: bool = True, allowed_hosts: list[str] = []) -> None:
-        self.app = app
-        self.strict = strict
-        self.allowed_hosts = allowed_hosts
+    def __init__(self) -> None:
+        self.strict = _settings.get('strict') or True
+        self.allowed_hosts = _settings.get('allowed_host') or []
 
     async def __call__(self, request: Request, response: Response) -> Response:
         if self._should_redirect(request):

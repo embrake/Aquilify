@@ -12,7 +12,15 @@ from itsdangerous import (
 )
 
 from ..wrappers import Request, Response
-from ..exception.base import TooManyRequests
+
+from ..settings.csrf import CSRFConfigSettings
+
+try:
+    _config_settings = CSRFConfigSettings()
+    _config_settings.fetch()
+    _settings = _config_settings.csrf_data[0]
+except Exception as e:
+    raise Exception("CSRF Configuration Not Found in settings.py, configure the CSRF settings before you use.")
 
 class CSRFTokenError(Exception):
     pass
@@ -44,42 +52,24 @@ class RateLimiter:
 
 class CSRF:
     def __init__(
-        self,
-        secret_key: str,
-        expiration: Optional[timedelta] = timedelta(hours=1),
-        csrf_token_key: str = "_csrf_token",
-        cookie_options: Optional[dict] = None,
-        protected_methods: Optional[list] = ["POST", "PUT", "DELETE"],
-        logger: Optional[logging.Logger] = None,
-        token_length: int = 32,
-        enforce_https: bool = True,
-        min_entropy: float = 3.5,
-        ip_verification: bool = True,
-        trusted_ips: Optional[list] = None,
-        rate_limit: Optional[dict] = None,
-        token_revocation_expiration: Optional[timedelta] = timedelta(days=1),
-        max_token_lifetime: Optional[timedelta] = timedelta(days=7),
-        token_refresh_interval: Optional[timedelta] = timedelta(hours=6),
+        self
     ):
-        self.secret_key = secret_key
-        self.expiration = expiration
-        self.csrf_token_key = csrf_token_key
-        self.cookie_options = cookie_options or {"httponly": True, "secure": enforce_https, "samesite": 'strict'}
-        self.protected_methods = protected_methods
-        self.logger = logger or logging.getLogger(__name__)
-        self.token_length = token_length
-        self.enforce_https = enforce_https
-        self.min_entropy = min_entropy
-        self.ip_verification = ip_verification
-        self.trusted_ips = set(trusted_ips) if trusted_ips else set()
-        self.rate_limit = rate_limit
-        self.rate_limiter = RateLimiter(max_requests=rate_limit["max_requests"], time_window=rate_limit["time_window"]) if rate_limit else None
-        self.token_revocation_expiration = token_revocation_expiration
-        self.max_token_lifetime = max_token_lifetime
-        self.token_refresh_interval = token_refresh_interval
-        self.serializer = URLSafeTimedSerializer(secret_key)
-        self.request_tokens = {}
+        self.secret_key = _settings['options'].get('secret_key')
+        self.expiration = _settings['options'].get('expiration') or timedelta(hours=1)
+        self.csrf_token_key = _settings['options'].get('token_key') or "_csrf_token"
+        self.cookie_options = _settings['options'].get('cookie_options') or {"httponly": True, "secure": True, "samesite": 'strict'}
+        self.protected_methods = _settings['options'].get('protected_methods') or ["POST", "PUT", "DELETE"]
+        self.logger = _settings['options'].get('logger') or logging.getLogger(__name__)
+        self.ip_verification = _settings['options'].get('ip_verification') or True
+        self.trusted_ips = set(_settings['options'].get('trusted_ips')) if _settings['options'].get('trusted_ips') else set()
+        self.rate_limit = None
+        self.rate_limiter = RateLimiter(max_requests=self.rate_limit["max_requests"], time_window=self.rate_limit["time_window"]) if self.rate_limit else None
+        self.max_token_lifetime = _settings['options'].get('max_token_lifetime') or timedelta(days=7)
+        self.token_refresh_interval = _settings['options'].get('token_refresh_interval') or timedelta(days=6)
+        self.serializer = URLSafeTimedSerializer(self.secret_key)
         self.revoked_tokens = set()
+
+        assert _settings.get('backend') == 'aquilify.security.csrf.CSRF', "Invalid backend for CSRF Protection."
 
     async def generate_csrf_token(self, client_ip: str) -> str:
         token = secrets.token_hex(32)
@@ -124,11 +114,9 @@ class CSRF:
                 self.logger.warning("CSRF token validation failed: IP address mismatch.")
                 return False
 
-            if self.trusted_ips and request.client.host not in self.trusted_ips:
+            if self.trusted_ips and '*' not in self.trusted_ips and request.client.host not in self.trusted_ips:
                 self.logger.warning("CSRF token validation failed: Untrusted IP address.")
                 return False
-
-            await self._cleanup_revoked_tokens()
 
             return csrf_token is not None and decoded_csrf_token == decoded_submitted_token
         except (BadTimeSignature, SignatureExpired) as e:
@@ -137,34 +125,6 @@ class CSRF:
         except Exception as e:
             self.logger.error(f"Error validating CSRF token: {e}")
             raise CSRFTokenError("Error validating CSRF token")
-
-    def csrf_protect(self, func):
-        @wraps(func)
-        async def wrapper(request: Request, *args, **kwargs):
-            if request.method in self.protected_methods:
-                try:
-                    if not await self.validate_csrf_token(request):
-                        return Response("CSRF Token Validation Failed", status_code=403)
-                except CSRFTokenError:
-                    return Response("CSRF Token Validation Error", status_code=500)
-
-                client_ip = self.get_client_ip(request)
-
-                if self.rate_limiter and not self.rate_limiter.check(client_ip):
-                    self.logger.warning(f"Rate limit exceeded for IP {client_ip}")
-                    return TooManyRequests("Rate limit exceeded")
-
-                if self.token_refresh_interval and await self.should_refresh_csrf_token(request.cookies.get(self.csrf_token_key)):
-                    new_csrf_token = await self.generate_csrf_token(client_ip)
-                    return await self.inject_csrf_token(Response(), new_csrf_token)
-
-            return await func(request, *args, **kwargs)
-
-        return wrapper
-
-    async def _cleanup_revoked_tokens(self):
-        current_time = await asyncio.to_thread(datetime.utcnow)
-        self.revoked_tokens = {token for token in self.revoked_tokens if await self.is_within_lifetime(token, current_time())}
 
     async def _is_within_lifetime(self, csrf_token: str, current_time: datetime) -> bool:
         if not self.max_token_lifetime:

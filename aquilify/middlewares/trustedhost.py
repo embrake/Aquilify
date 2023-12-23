@@ -3,28 +3,26 @@ from ..wrappers import Request, Response
 from ..exception.base import Forbidden
 from ..responses import RedirectResponse
 
+from ..settings.trustedhost import TrustedHostConfigSettings
+
+_settings = TrustedHostConfigSettings().fetch()
+
 class TrustedhostMiddleware:
     def __init__(
-        self,
-        allowed_hosts: List[str] = ["*"],
-        allow_subdomains: bool = True,
-        redirect_on_fail: bool = False,
-        redirect_url: Optional[str] = None,
-        enforce_https: bool = False,
-        www_redirect: bool = False,
+        self
     ) -> None:
-        self.allowed_hosts = allowed_hosts
-        self.allow_subdomains = allow_subdomains
-        self.redirect_on_fail = redirect_on_fail
-        self.redirect_url = redirect_url
-        self.enforce_https = enforce_https
-        self.www_redirect = www_redirect
+        self.allowed_hosts: List[str] = _settings.get('allowed_hosts') or ["*"]
+        self.allow_subdomains: bool = _settings.get('allow_subdomains') or True
+        self.redirect_on_fail: bool = _settings.get("redirect_on_fail") or False
+        self.redirect_url: Optional[str] = _settings.get('redirect_url') or None
+        self.enforce_https: bool = _settings.get('enforce_https') or False
+        self.www_redirect: bool = _settings.get('www_redirect') or False
 
     async def __call__(
         self, request: Request, response: Response
     ) -> Awaitable[Response]:
         try:
-            host = request.headers.get("host", "")
+            host = request.host
             if not host:
                 return await self._handle_fail_response()
             
