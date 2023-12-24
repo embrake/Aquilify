@@ -13,8 +13,7 @@ enviroment.export => (builder) = {
     "sysMenSecretKey": "str(base64.encode('utf-8'))",
     "sysEnviromentPath": "os.path.join('/{folder}/{project}', '.aquilify')",
     "sysEnviromentSettings": "settings.py",
-    "__version__": "float(1.13)",
+    "__version__": "float(1.14)",
     "__controller__": "aquilify.core.application",
     "__name__": "aquilify",
-    "__versionControl__": "git.aquilify.commit"
 }

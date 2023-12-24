@@ -9,6 +9,7 @@ from ..utils._utils import AwaitableOrContextManager, AwaitableOrContextManagerW
 from ..datastructure.core import URL, Address, FormData, Headers, State
 from ..exception.http_exception import HTTPException
 from ..datastructure.formparser import FormParser, MultiPartException, MultiPartParser
+from ..datastructure.user_agent import UserAgentParser
 from ..types import Message, Receive, Scope, Send
 
 try:
@@ -114,8 +115,8 @@ class HTTPConnection(typing.Mapping[str, typing.Any]):
         return self.headers.get('authorization')
     
     @property
-    def user_agent(self) -> str:
-        return self.headers.get('user-agent', '')
+    def user_agent(self) -> UserAgentParser:
+        return UserAgentParser(self.headers.get('user-agent', ''))
 
     @property
     def referer(self) -> str:

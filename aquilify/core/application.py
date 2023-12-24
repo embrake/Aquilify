@@ -68,6 +68,7 @@ from .__globals import (
 )
 
 from ..responses import HTMLResponse
+from ..settings.lifespan import ASGILifespanLoader
 
 from .__status import exception_dict
 
@@ -155,6 +156,7 @@ class Aquilify:
         self.settings_stage_handler = StageHandler()
         self.settings_stage_handler.process_stage_handlers(self)
         fetchSettingsMiddleware(self)
+        self._check_lifespan_settings()
 
     def errorhandler(self, status_code: int) -> Callable:
         def decorator(handler: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
@@ -958,10 +960,14 @@ class Aquilify:
 
     async def _startup_handlers(self) -> None:
         for handler in self.startup_handlers:
+            if not (inspect.iscoroutinefunction(handler) or inspect.isasyncgenfunction(handler)):
+                raise TypeError("ASGI can only register asynchronous lifespan functions.")
             await handler()
 
     async def _shutdown_handlers(self) -> None:
         for handler in self.shutdown_handlers:
+            if not (inspect.iscoroutinefunction(handler) or inspect.isasyncgenfunction(handler)):
+                raise TypeError("ASGI can only register asynchronous lifespan functions.")
             await handler()
 
     def event(self, event_type: str) -> Callable:
@@ -985,3 +991,13 @@ class Aquilify:
                 self.shutdown_handlers.extend(on_shutdown)
             else:
                 self.shutdown_handlers.append(on_shutdown)
+                
+    def _check_lifespan_settings(self):
+        _settings = ASGILifespanLoader().load_asgi_lifespans()
+        for lifespan in _settings:
+            if lifespan.get('event') == 'startup':
+                self.startup_handlers.append(lifespan.get('origin'))
+            elif lifespan.get('event') == 'shutdown':
+                self.shutdown_handlers.append(lifespan.get('origin'))
+            else:
+                raise HTTPException('Invalid event type! {} use either startup or shutdown.'.format(lifespan.get('origin')))

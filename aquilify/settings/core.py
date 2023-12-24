@@ -2,12 +2,7 @@ import importlib.util
 import os
 import re
 import ast
-import sys
-from typing import Callable, Awaitable, Optional, List, Union, Any, Dict
-
-CachedModules = Dict[str, Any]
-
-cached_modules: CachedModules = {}
+from typing import Callable, Awaitable, Optional, List, Union, Any
 
 class BaseSettings:
     def __init__(self) -> None:
@@ -52,7 +47,7 @@ class BaseMiddlewareSettings:
     def static_settings(self):
         default_settings = {
             'static_folders': {'/static': os.path.join(self.base_dir, 'static')},
-            'cache_max_age': 3600,
+            'cache_max_age': 0,
             'enable_gzip': True,
             'response_handler': None,
             'chunk_size': 65536
@@ -107,6 +102,9 @@ class MiddlewareEntry:
 def fetchSettingsMiddleware(your_instance):
     settings_module_path = 'settings'
     middlewares = _import_middleware(settings_module_path)
+    
+    if not middlewares:
+        pass
 
     for middleware_entry in middlewares:
         if middleware_entry.__init__ == "app":
@@ -242,77 +240,3 @@ class StageHandler:
 
             except ImportError as e:
                 raise ImportError(f"Error processing middleware: {e}")
-
-class EntryPointExtractor:
-    def __init__(self):
-        pass
-
-    def _extract_module_info(self, entry_point):
-        module_info = {}
-        if isinstance(entry_point, str):
-            index_of_dot = entry_point.find('.')
-            if index_of_dot != -1:
-                module_info['module_path'] = entry_point[:index_of_dot]
-                module_info['module_variable'] = entry_point[index_of_dot + 1:]
-            else:
-                module_info['module_path'] = entry_point
-                module_info['module_variable'] = None
-        return module_info
-
-    def extractEntryPoint(self):
-        current_directory = os.getcwd()
-        settings_path = os.path.join(current_directory, 'settings.py')
-
-        if os.path.exists(settings_path):
-            spec = importlib.util.spec_from_file_location("settings", settings_path)
-            settings = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(settings)
-
-            if hasattr(settings, 'ENTRY_POINT'):
-                entry_point = settings.ENTRY_POINT
-                return self._extract_module_info(entry_point)
-            else:
-                return None
-        else:
-            return None
-
-def importer():
-    entry_point = EntryPointExtractor().extractEntryPoint()
-    module_name = entry_point['module_path'] or '__root__'
-    module_path = '.'
-    variable_name = entry_point['module_variable'] or '__instance__'
-    try:
-        if module_name in sys.modules:
-            module = sys.modules[module_name]
-            if module.__file__.startswith(module_path):
-                if variable_name is None:
-                    return module
-                else:
-                    imported_variable = getattr(module, variable_name, None)
-                    if imported_variable is not None:
-                        return imported_variable
-                    else:
-                        raise AttributeError(f"Variable '{variable_name}' not found in module '{module_name}'")
-            else:
-                raise ImportError(f"Module '{module_name}' exists but is not within the specified path '{module_path}'")
-        
-        spec = importlib.util.find_spec(module_name)
-        if spec is not None:
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            sys.modules[module_name] = module
-            cached_modules[module_name] = module
-
-            if variable_name is None:
-                return module
-            else:
-                imported_variable = getattr(module, variable_name, None)
-                if imported_variable is not None:
-                    return imported_variable
-                else:
-                    raise AttributeError(f"Variable '{variable_name}' not found in module '{module_name}'")
-        else:
-            raise ImportError(f"Module '{module_name}' not found in the Python path")
-
-    except Exception as e:
-        raise ImportError(f"Failed to import '{variable_name}' from '{module_name}': {e}")

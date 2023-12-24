@@ -111,10 +111,16 @@ class StaticMiddleware:
         return gzip.compress(content)
 
     def add_cache_headers(self, response: Response) -> None:
-        response.headers["Cache-Control"] = f"max-age={self.cache_max_age}"
-        expires: datetime = datetime.utcnow() + timedelta(seconds=self.cache_max_age)
-        response.headers["Expires"] = expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
-        response.headers["Vary"] = "Accept-Encoding"
+        if int(self.cache_max_age) != 0:
+            response.headers["Cache-Control"] = f"max-age={self.cache_max_age}"
+            expires: datetime = datetime.utcnow() + timedelta(seconds=self.cache_max_age)
+            response.headers["Expires"] = expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
+            response.headers["Vary"] = "Accept-Encoding"
+        else:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            response.headers["Vary"] = "*"
 
     def add_etag(self, file_path: str, response: Response) -> None:
         hash_md5 = hashlib.md5()

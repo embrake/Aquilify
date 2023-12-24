@@ -1,9 +1,9 @@
 import typing
 
 if typing.TYPE_CHECKING:
-    from wrappers import Request
-    from wrappers import Response
-    from wrappers import WebSocket
+    from .wrappers import Request
+    from .wrappers import Response
+    from .wrappers import WebSocket
 
 AppType = typing.TypeVar("AppType")
 
