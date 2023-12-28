@@ -289,6 +289,8 @@ environment.export => (builder) = {
 
         except Exception as e:
             self._print_colored(f"An error occurred while running the server: {e}", Colors.FAIL)
+        except KeyboardInterrupt as e:
+            pass
         
     def _create_app_interactively(self):
         questions = [

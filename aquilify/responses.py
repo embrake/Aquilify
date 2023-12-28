@@ -95,6 +95,9 @@ class HTMLResponse(BaseResponse):
         """
         super().__init__(content, status, headers)
         self.headers.setdefault('Content-Type', f'{content_type}; charset={encoding}')
+        
+    def __str__(self):
+        return f"HTMLResponse: Status={self.status_code}, Content-Type={self.content_type}, Content-Length={len(self.content)}"
 
 class RedirectResponse(BaseResponse):
     def __init__(
@@ -106,7 +109,6 @@ class RedirectResponse(BaseResponse):
         anchor: Optional[str] = None,
         delay: float = 0.0,
         content: Optional[str] = None,
-        secure_headers: bool = True,
     ) -> None:
         super().__init__(
             content=content or b"", status_code=status_code, headers=headers or {}
@@ -124,9 +126,6 @@ class RedirectResponse(BaseResponse):
             parsed_url = self._add_anchor(parsed_url, anchor)
 
         self.headers["Location"] = self._quote_url(parsed_url)
-
-        if secure_headers:
-            self._add_security_headers()
 
     def _add_query_params(
         self, parsed_url, query_params: Dict[str, Union[str, int]]
@@ -153,12 +152,6 @@ class RedirectResponse(BaseResponse):
         return urlunsplit(
             (parsed_url.scheme, parsed_url.netloc, parsed_url.path, parsed_url.query, parsed_url.fragment)
         )
-
-    def _add_security_headers(self):
-        self.headers['X-Content-Type-Options'] = 'nosniff'
-        self.headers['X-Frame-Options'] = 'DENY'
-        self.headers['Content-Security-Policy'] = "default-src 'self'"
-        self.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     
 
 class FileResponse(BaseResponse):
@@ -166,6 +159,7 @@ class FileResponse(BaseResponse):
         self,
         file_path: str,
         filename: Optional[str] = None,
+        status: Optional[int] = 200,
         headers: Optional[Dict[str, Union[str, int]]] = None,
         content_type: Optional[str] = None,
         inline: bool = False,
@@ -176,7 +170,7 @@ class FileResponse(BaseResponse):
         stream_file: bool = False,
         content_disposition: Optional[str] = None,
     ) -> None:
-        super().__init__(content=None, status_code=200, headers=headers or {})
+        super().__init__(content=None, status_code=status, headers=headers or {})
         self.buffer_size = buffer_size
 
         if not os.path.exists(file_path):

@@ -46,7 +46,8 @@ class BaseMiddlewareSettings:
 
     def static_settings(self):
         default_settings = {
-            'static_folders': {'/static': os.path.join(self.base_dir, 'static')},
+            'static_folders': [os.path.join(self.base_dir, 'static')],
+            'url_prefix': '/static/',
             'cache_max_age': 0,
             'enable_gzip': True,
             'response_handler': None,
@@ -63,7 +64,8 @@ class BaseMiddlewareSettings:
         except ImportError:
             return default_settings
 
-        static_folders = getattr(settings, "STATIC_CONFIG", default_settings['static_folders'])
+        static_folders = getattr(settings, "STATICFILE_DIRS", default_settings['static_folders'])
+        static_url_prefix = getattr(settings, "STATIC_URL", default_settings['url_prefix'])
         cache_max_age = getattr(settings, "STATIC_MAX_AGE", default_settings['cache_max_age'])
         enable_gzip = getattr(settings, "STATIC_GZIP_COMPRESSION", default_settings['enable_gzip'])
         response_handler = getattr(settings, "STATIC_RESPONSE_HANDLER", default_settings['response_handler'])
@@ -71,6 +73,7 @@ class BaseMiddlewareSettings:
 
         return {
             'static_folders': static_folders,
+            'url_prefix': static_url_prefix,
             'cache_max_age': cache_max_age,
             'enable_gzip': enable_gzip,
             'response_handler': response_handler,

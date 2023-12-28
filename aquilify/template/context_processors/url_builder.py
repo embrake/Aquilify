@@ -1,34 +1,55 @@
-from urllib.parse import urljoin, urlencode
+from urllib.parse import urlencode
+from ...settings import settings
+from typing import Dict, Any, Callable, Union
 
-class TemplateURLBuilder:
+from ...security.crypter import safe_join
+
+class EndpointNotFoundError(ValueError):
+    pass
+
+class MissingParameterError(ValueError):
+    pass
+
+class URLContextProcessor:
     def __init__(self):
-        self.endpoints = {
-            'static': self._build_static_url,
-            'redirect': self._build_redirect_url
+        self.ENDPOINTS: Dict[str, Callable[..., str]] = {
+            'static': URLContextProcessor._build_static_url,
+            'redirect': URLContextProcessor._build_redirect_url,
+            'media': URLContextProcessor._build_media_url
         }
 
-    def build_url(self, endpoint: str, **values) -> str:
-        builder_func = self.endpoints.get(endpoint)
+    def build_url(self, endpoint: str, **values: Any) -> str:
+        builder_func: Callable[..., str] = self.ENDPOINTS.get(endpoint)
         if builder_func is None:
-            raise ValueError(f"Invalid endpoint '{endpoint}' provided")
-        return builder_func(**values)
+            raise EndpointNotFoundError(f"Endpoint '{endpoint}' not found")
 
-    def _build_static_url(self, **values) -> str:
-        filename = values.get('filename')
-        if filename is None:
-            raise ValueError("Static filename not provided")
-        return f'/static/{filename}'
+        return builder_func(self, **values)
 
-    def _build_redirect_url(self, **values) -> str:
-        location = values.get('location')
-        if location is None:
-            raise ValueError("Redirect location not provided")
+    @staticmethod
+    def _build_static_url(self, **values: Any) -> str:
+        filename: Union[str, None] = values.get('filename')
+        if not filename:
+            raise MissingParameterError("Static filename not provided")
+        return safe_join(settings.STATIC_URL, filename)
 
-        args = values.get('args', {})
-        if args:
-            location = urljoin(location, f'?{urlencode(args)}')
-        return location
+    @staticmethod
+    def _build_media_url(self, **values: Any) -> str:
+        filename: Union[str, None] = values.get('filename')
+        if not filename:
+            raise MissingParameterError("Media filename not provided")
+        return safe_join(settings.MEDIA_URL, filename)
 
-    async def __call__(self, context, request):
-        context['build_url'] = self.build_url
+    @staticmethod
+    def _build_redirect_url(self, **values: Any) -> str:
+        location: Union[str, None] = values.get('location')
+        if not location:
+            raise MissingParameterError("Redirect location not provided")
+
+        args: Dict[str, Any] = values.get('args', {})
+        query_string = urlencode(args) if args else ''
+
+        return safe_join(location, query_string)
+
+    async def __call__(self, context: Dict[str, Any], request: Any) -> Dict[str, Any]:
+        context['url'] = self.build_url
         return context

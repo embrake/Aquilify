@@ -59,7 +59,7 @@ class HTTPConnection(typing.Mapping[str, typing.Any]):
     def __len__(self) -> int:
         return len(self.scope)
     
-    __eq__ = object.__eq__
+    __eq__ = object.__eq__ 
     __hash__ = object.__hash__
 
     @property

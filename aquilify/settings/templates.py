@@ -32,6 +32,7 @@ class TemplateConfigSettings:
         dirs = self._get_dirs(template)
         options = self._get_options(template)
         context_processors = self._load_context_processors(options.get('context_processors', []))
+        extensions = self._load_extensions(options.get('extensions', []))
         csrf = self._load_csrf(template.get('CSRF', None))
 
         if csrf_setting is None and csrf is not None:
@@ -43,7 +44,9 @@ class TemplateConfigSettings:
             'csrf': csrf,
             'options': {
                 'context_processors': context_processors,
-                'enviroment': options.get('enviroment', None)
+                'enviroment': options.get('enviroment', None),
+                'extensions': extensions,
+                'cache_size': options.get('cache_size', 400)
             }
         }
 
@@ -65,6 +68,27 @@ class TemplateConfigSettings:
             if processor:
                 processors.append(processor)
         return processors
+    
+    def _load_extensions(self, processor_paths: list) -> list:
+        processors = []
+        for processor_path in processor_paths:
+            processor = self._load_extenstions_processor(processor_path)
+            if processor:
+                processors.append(processor)
+        return processors
+    
+    def _load_extenstions_processor(self, processor_path: str):
+        if processor_path:
+            try:
+                parts = processor_path.split('.')
+                module_path = '.'.join(parts[:-1])
+                callback_name = parts[-1]
+                callback_module = importlib.import_module(module_path)
+                callback_obj = getattr(callback_module, callback_name)
+                return callback_obj
+            except (AttributeError, ImportError, ValueError) as e:
+                print(f"Error fetching callback: {e}")
+        return None
 
     def _load_processor(self, processor_path: str):
         if processor_path:

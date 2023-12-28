@@ -699,8 +699,8 @@ class Aquilify:
         await response(scope, receive, send)
 
     async def _context_processer(self, request: Request):
-        context = request.context
-        context.setdefault('hasster', '__aquilify.core')
+        request.context['_request'] = request
+        request.context['_app'] = self
 
     async def _process_exception(self, e, request) -> Response:
         reversed_exception_dict = {v: k for k, v in exception_dict.items()}

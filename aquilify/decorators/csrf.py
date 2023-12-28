@@ -3,7 +3,7 @@ from ..wrappers import (
     Request,
     Response
 )
-from ..exception.base import TooManyRequests, Forbidden, InternalServerError
+from ..exception.base import TooManyRequests, Forbidden
 from ..security.csrf import CSRF, CSRFTokenError
 
 _csrf = CSRF()
@@ -16,7 +16,7 @@ def protect(func):
                 if not await _csrf.validate_csrf_token(request):
                     return Forbidden('CSRF Token Validation Failed')
             except CSRFTokenError:
-                return InternalServerError('CSRF Token Validation Failed')
+                return Forbidden('CSRF Token Validation Failed')
 
             client_ip = _csrf.get_client_ip(request)
 

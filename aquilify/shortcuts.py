@@ -2,8 +2,12 @@
 
 # LICENCED BY AQUILIFY
 
+import jinja2
+
 from .template import Jinja2Templates
 from .responses import RedirectResponse
+
+from aquilify.settings import settings
 
 from typing import Optional, Dict, Any
 
@@ -57,6 +61,65 @@ async def render(
         )
     except Exception as e:
         raise e
+    
+def render_from_string(
+    template_name: str = None,
+    template_string: str = None,
+    context: dict = None
+):
+    """
+    Render a Jinja2 template from either a template file or a string.
+
+    Args:
+        template_name (str, optional): The name of the template file to render.
+        template_string (str, optional): The template string to render.
+        context (dict, optional): The context data to render the template.
+
+    Returns:
+        str: Rendered content as a string.
+
+    Raises:
+        ValueError: If neither 'template_name' nor 'template_string' is provided,
+                    or if both are provided simultaneously.
+        FileNotFoundError: If the template file specified by 'template_name' is not found.
+        SyntaxError: If there is a syntax error in the provided template.
+        RuntimeError: If an error occurs during template rendering.
+    """
+    env: jinja2.Environment = jinja2.Environment(loader=jinja2.FileSystemLoader(settings.TEMPLATES[0].get('DIRS')))
+    
+    if not (template_name or template_string):
+        raise ValueError("Either 'template_name' or 'template_string' must be provided.")
+
+    if template_name and template_string:
+        raise ValueError("Only one of 'template_name' or 'template_string' should be provided.")
+
+    if context is None:
+        context = {}
+
+    try:
+        if template_name:
+            if not env:
+                raise ValueError("Jinja2 Environment 'env' must be provided when using 'template_name'.")
+            
+            template = env.get_template(template_name)
+        else:
+            if not template_string:
+                raise ValueError("When using 'template_string', the template string must be provided.")
+
+            if not env:
+                env = jinja2.Environment()
+
+            template = env.from_string(template_string)
+
+        content = template.render(context)
+        return content
+
+    except jinja2.TemplateNotFound as e:
+        raise FileNotFoundError(f"Template '{template_name}' not found.") from e
+    except jinja2.TemplateSyntaxError as e:
+        raise SyntaxError(f"Syntax error in the provided template: {e.message}") from e
+    except Exception as e:
+        raise RuntimeError(f"An error occurred during template rendering: {e}") from e
     
 async def redirect(
     url: Optional[str] = None,

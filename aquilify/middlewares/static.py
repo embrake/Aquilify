@@ -15,7 +15,8 @@ from typing import (
     Optional,
     Callable,
     Union,
-    List
+    List,
+    Any
 )
 
 from ..wrappers import (
@@ -31,56 +32,70 @@ class StaticMiddleware:
         self
     ) -> None:
         self.settings = BaseMiddlewareSettings().static_settings()
-        self.static_folders: Dict[str, str] = self.settings['static_folders']
+        self.static_folders: List[Any] = self.settings['static_folders']
+        self.url_prefix = self.settings['url_prefix']
         self.cache_max_age: int = self.settings['cache_max_age']
         self.enable_gzip: bool = self.settings['enable_gzip']
         self.response_handler: Optional[Callable[[Response, str], Response]] = self.settings['response_handler']
         self.chunk_size: int = self.settings['chunk_size']
 
     async def __call__(self, request: Request, response: Response) -> Union[Response, JsonResponse]:
-        path: str = request.path
+        try:
+            if request.path.startswith(self.url_prefix):
+                requested_file_path, filename = self.find_requested_file(request.path)
 
-        for url_prefix, static_folder in self.static_folders.items():
-            if path.startswith(url_prefix):
-                filename: str = path[len(url_prefix):]
-                static_path: str = os.path.join(static_folder, filename)
+                if requested_file_path:
+                    return await self.handle_requested_file(request, response, requested_file_path, filename)
 
-                if not os.path.exists(static_path) or not os.access(static_path, os.R_OK):
-                    return JsonResponse({"error": "Invalid path or permission error"}, status=400)
+                return JsonResponse({"error": "File not found"}, status=404)
+            return response
+        except Exception as e:
+            return self.handle_error(str(e))
 
-                if os.path.isfile(static_path):
-                    mime, _ = mimetypes.guess_type(static_path)
-                    
-                    if mime:
-                        content: bytes = await self.get_file_content(static_path, request)
-                        response.headers["Content-Type"] = mime
+    def find_requested_file(self, path: str) -> Union[str, str]:
+        for static_folder in self.static_folders:
+            filename = path[len(self.url_prefix):]
+            static_path = os.path.join(static_folder, filename)
 
-                        if self.enable_gzip and "gzip" in request.headers.get("accept-encoding", default=""):
-                            content = await self.gzip_content(content)
-                            response.headers["Content-Encoding"] = "gzip"
+            if os.path.isfile(static_path):
+                return static_path, filename
 
-                        self.add_cache_headers(response)
-                        self.add_etag(static_path, response)
-                        self.__base_headers(response, static_path)
+        return None, None
 
-                        await response.content_disposition(filename, inline=True)
-                        await response.last_modified(datetime.fromtimestamp(os.path.getmtime(static_path)))
+    async def handle_requested_file(self, request: Request, response: Response, static_path: str, filename: str) -> Union[Response, JsonResponse]:
+        if not self.is_supported_file(filename):
+            return self.handle_error("File type not supported", status_code=400)
 
-                        if await self.is_resource_not_modified(request, response):
-                            return JsonResponse({"detail": "Not Modified"}, status=304)
+        mime = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
 
-                        if self.response_handler:
-                            response = self.response_handler(response, static_path)
+        content: bytes = await self.get_file_content(static_path, request)
+        response.headers["Content-Type"] = mime
 
-                        if request.method == 'GET':
-                            return Response(content, headers=response.headers)
-                        else:
-                            return response
+        if self.enable_gzip and "gzip" in request.headers.get("accept-encoding", ""):
+            content = await self.gzip_content(content)
+            response.headers["Content-Encoding"] = "gzip"
 
-                elif os.path.isdir(static_path):
-                    return JsonResponse({"error": "Requested path is a directory"}, status=400)
+        self.add_cache_headers(response)
+        self.add_etag(static_path, response)
+        self.__base_headers(response, static_path)
 
-        return response
+        await response.content_disposition(filename, inline=True)
+        await response.last_modified(datetime.fromtimestamp(os.path.getmtime(static_path)))
+
+        if await self.is_resource_not_modified(request, response):
+            response.status_code = 304
+
+        if self.response_handler:
+            response = self.response_handler(response, static_path)
+
+        return Response(content, headers=response.headers)
+
+    def is_supported_file(self, filename: str) -> bool:
+        allowed_extensions = ('.js', '.css')
+        return os.path.splitext(filename)[1] in allowed_extensions
+
+    def handle_error(self, error_message: str, status_code: int = 500) -> JsonResponse:
+        return JsonResponse({"error": error_message}, status=status_code)
 
     async def get_file_content(self, file_path: str, request: Request) -> bytes:
         range_header: Optional[str] = request.headers.get("Range")
@@ -139,8 +154,3 @@ class StaticMiddleware:
     async def is_resource_not_modified(self, request: Request, response: Response) -> bool:
         etag: Optional[str] = response.headers.get("ETag")
         return etag in request.headers.get('If-None-Match', default="")
-
-    async def handle_not_modified(self, response: Response) -> Response:
-        response.status_code = 304
-        response.content = b""
-        return response

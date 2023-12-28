@@ -13,6 +13,7 @@ from .timeout import TimeoutMiddleware
 from .compression import CompressionMiddleware
 from .xfameoption import XFrameOptionsMiddleware
 from .csrfmiddleware import CSRFMiddleware as CSRFMiddleware
+from .media import MediaMiddleware as MediaMiddleware
 
 __all__ = [
     'CORSMiddleware',
@@ -29,5 +30,6 @@ __all__ = [
     'TimeoutMiddleware',
     'CompressionMiddleware',
     'XFrameOptionsMiddleware',
-    'CSRFMiddleware'
+    'CSRFMiddleware',
+    'MediaMiddleware'
 ]

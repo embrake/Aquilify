@@ -25,7 +25,7 @@ class HttpException(Exception):
         error_message = f"HTTP {self.status_code} - {self.reason}\n"
         return error_message
 
-class ApiRequest:
+class ClientSession:
     def __init__(self):
         self.default_timeout: int = 10 
         self.max_redirects: int = 5

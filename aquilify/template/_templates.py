@@ -51,7 +51,7 @@ class TemplateResponse:
         if self.template_engine not in ["jinja2"]:
             raise ValueError("Unsupported template engine. Currently, only 'jinja2' is supported.")
 
-        self.env = self._create_environment()
+        self.env: Environment = self._create_environment()
 
     def _check_jinja2_library(self):
         if Environment is None:

@@ -25,7 +25,7 @@ class String(Field):
 
     async def validate(self, data: Any) -> str:
         if not isinstance(data, str):
-            raise ValidationError("Invalid data type. Expected string.")
+            raise ValidationError(self.error_messages.get("validation", "Invalid data type. Expected string."))
 
         if self.strip_whitespace:
             data = data.strip()

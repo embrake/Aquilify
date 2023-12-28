@@ -47,18 +47,18 @@ def rule(
         return ValueError("**kwargs support isn't implemented yet! @noql -> 4113")
     
     if endpoint is None:
-        raise ValueError("Handler function is required for adding a route.")
+        raise ImproperlyConfigured("Handler function is required for adding a route.")
 
     if not inspect.iscoroutinefunction(endpoint) and not inspect.isasyncgenfunction(endpoint):
-        raise TypeError("ASGI can only register asynchronous functions.")
+        raise ImproperlyConfigured("ASGI can only register asynchronous functions.")
 
     if not path.startswith('/'):
-        raise TypeError("Paths must start with '/'.")
+        raise ImproperlyConfigured("Paths must start with '/'.")
 
     allowed_methods = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE"}
     if methods is not None and not all(method.upper() in allowed_methods for method in map(str.upper, methods)):
         invalid_methods = [method for method in methods if method.upper() not in allowed_methods]
-        raise ValueError(f"Invalid HTTP method(s) provided: {', '.join(invalid_methods)}")
+        raise ImproperlyConfigured(f"Invalid HTTP method(s) provided: {', '.join(invalid_methods)}")
 
     methods = methods or ["GET"]
 
@@ -84,13 +84,13 @@ def websocket(
     endpoint: Optional[Callable[..., Awaitable[T]]] = None
 ) -> None:
     if endpoint is None:
-        raise ValueError("Handler function is required for adding a websocket route.")
+        raise ImproperlyConfigured("Handler function is required for adding a websocket route.")
 
     if not inspect.iscoroutinefunction(endpoint) and not inspect.isasyncgenfunction(endpoint):
-        raise TypeError("ASGI Websocket can only register asynchronous functions.")
+        raise ImproperlyConfigured("ASGI Websocket can only register asynchronous functions.")
 
     if not path.startswith('/'):
-        raise TypeError("Websocket paths must start with '/'.")
+        raise ImproperlyConfigured("Websocket paths must start with '/'.")
     
     compiled_path, path_regex = Converter()._regex_converter(path, False)
     handler = endpoint
@@ -185,19 +185,18 @@ class _SchematicInstance:
 
 _schematic = _SchematicInstance()
 
-def link(schematic: Dict[str, str]) -> None:
-    for url_prefix, schematic_path in schematic.items():
-        try:
-            module_name, class_name = schematic_path.rsplit('.', 1)
-            module = import_module(module_name)
-            schematic_instance = getattr(module, class_name)
+def link(path: str, instance: Callable[..., Awaitable[Schematic]]) -> None:
+    try:
+        module_name, class_name = instance.rsplit('.', 1)
+        module = import_module(module_name)
+        schematic_instance = getattr(module, class_name)
+        
+        if not isinstance(schematic_instance, Schematic):
+            raise TypeError(f"{instance} is not a valid Aquilify Schematic ASGIApp class")
             
-            if not isinstance(schematic_instance, Schematic):
-                raise TypeError(f"{schematic_path} is not a valid Aquilify Schematic ASGIApp class")
-                
-            _schematic._process_routes(schematic_instance, url_prefix)
-            _schematic._process_schematic_instance(schematic_instance, url_prefix)
-        except (ValueError, AttributeError, ModuleNotFoundError) as e:
-            raise ImportError(f"Failed to import {schematic_path}: {e}")
-        except TypeError as e:
-            raise TypeError(f"Error processing {schematic_path}: {e}")
+        _schematic._process_routes(schematic_instance, path)
+        _schematic._process_schematic_instance(schematic_instance, path)
+    except (ValueError, AttributeError, ModuleNotFoundError) as e:
+        raise ImportError(f"Failed to import {instance}: {e}")
+    except TypeError as e:
+        raise TypeError(f"Error processing {instance}: {e}")

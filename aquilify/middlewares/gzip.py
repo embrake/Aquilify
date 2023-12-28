@@ -66,6 +66,9 @@ class GzipMiddleware:
 
     async def __call__(self, request, response):
         try:
+            if len(response.content) <= 50:
+                return response
+            
             if self._should_exclude_path(request.scope['path']):
                 return response
 

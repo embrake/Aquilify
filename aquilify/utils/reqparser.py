@@ -1,7 +1,29 @@
-from typing import Any, Dict, Union, Optional, List, Callable
 from ..wrappers import Request
 from ..datastructure.core import MultiDict
 from copy import deepcopy
+
+from typing import (
+    Any,
+    Dict,
+    Union,
+    Optional,
+    List,
+    Callable
+)
+
+class ReqparserError(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self) -> str:
+        return str(self.message)
+
+    def __json__(self) -> str:
+        return str(self)
+
+    def __dict__(self) -> dict:
+        return {'error': str(self)}
 
 class Reqparser:
     def __init__(self) -> None:
@@ -87,12 +109,12 @@ class Reqparser:
                 value = request.headers.get(arg['name'])
             elif loc == 'form':
                 value = form_data.get(arg['name'])
-            elif loc == 'cookies':
+            elif loc == 'cookie':
                 value = request.cookies.get(arg['name'])
             elif loc == 'json':
                 value = json_data.get(arg['name'])
             else:
-                raise ValueError(f"Invalid Location type: {loc}")
+                raise ReqparserError(f"Invalid Location type: {loc}")
 
             if value is not None:
                 return value
@@ -102,7 +124,7 @@ class Reqparser:
     def _process_missing_value(self, arg: Dict[str, Any], value: Any) -> Any:
         if value is None:
             if arg['required']:
-                raise ValueError(arg['error'] if arg['error'] else f"Missing required argument: {arg['name']}. {arg['help']}")
+                raise ReqparserError(arg['error'] if arg['error'] else f"Missing required argument: {arg['name']}. {arg['help']}")
             value = arg['default'] if arg['default'] is not None else arg['store_missing']
         return value
 
@@ -111,7 +133,7 @@ class Reqparser:
             value = value.strip()
 
         if arg['choices'] is not None and value not in arg['choices']:
-            raise ValueError(arg['error'] if arg['error'] else f"Invalid value for argument '{arg['name']}'. Choose from: {arg['choices']}")
+            raise ReqparserError(arg['error'] if arg['error'] else f"Invalid value for argument '{arg['name']}'. Choose from: {arg['choices']}")
 
         if arg['type'] is not None:
             value = self._validate_and_convert_value(arg, value)
@@ -123,12 +145,12 @@ class Reqparser:
             try:
                 value = int(value)
             except (ValueError, TypeError):
-                raise ValueError(arg['error'] if arg['error'] else f"Invalid value for argument '{arg['name']}' type")
+                raise ReqparserError(arg['error'] if arg['error'] else f"Invalid value for argument '{arg['name']}' type")
         elif arg['type'] is float:
             try:
                 value = float(value)
             except (ValueError, TypeError):
-                raise ValueError(arg['error'] if arg['error'] else f"Invalid value for argument '{arg['name']}' type")
+                raise ReqparserError(arg['error'] if arg['error'] else f"Invalid value for argument '{arg['name']}' type")
             
         validation_function = arg.get('validation')
         if validation_function:
@@ -136,7 +158,7 @@ class Reqparser:
                 validated_value = validation_function(value)
                 value = validated_value
             except ValueError as ve:
-                raise ValueError(str(ve))
+                raise ReqparserError(str(ve))
 
         return value
     

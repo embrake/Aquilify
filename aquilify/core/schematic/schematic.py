@@ -46,7 +46,7 @@ class Schematic:
         self.middleware(self._schematicIdMiddleware)
         self._helper_route_setup()
 
-    def link(
+    def rule(
         self,
         path: str,
         methods: Optional[List[str]] = None,
@@ -88,7 +88,7 @@ class Schematic:
         except Exception as e:
             raise e
         
-    def add_link(
+    def add_rule(
         self,
         path: str,
         methods: Optional[List[str]] = None,
@@ -196,7 +196,6 @@ class Schematic:
                     endpoint,
                 )
             )
-            print(self.routes)
 
     async def _schematicIdMiddleware(self, request, response):
         response.headers['schematic-instance-id'] = self.schematic_id

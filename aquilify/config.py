@@ -1,162 +1,151 @@
 import os
-import json
-import platform
-from typing import Callable, Any, Type
-from enum import Enum
+import typing
+from pathlib import Path
 
-class ConfigError(Exception):
+
+class undefined:
     pass
 
+
+class EnvironError(Exception):
+    pass
+
+
+class Environ(typing.MutableMapping[str, str]):
+    def __init__(self, environ: typing.MutableMapping[str, str] = os.environ):
+        self._environ = environ
+        self._has_been_read: typing.Set[str] = set()
+
+    def __getitem__(self, key: str) -> str:
+        self._has_been_read.add(key)
+        return self._environ.__getitem__(key)
+
+    def __setitem__(self, key: str, value: str) -> None:
+        if key in self._has_been_read:
+            raise EnvironError(
+                f"Attempting to set environ['{key}'], but the value has already been "
+                "read."
+            )
+        self._environ.__setitem__(key, value)
+
+    def __delitem__(self, key: str) -> None:
+        if key in self._has_been_read:
+            raise EnvironError(
+                f"Attempting to delete environ['{key}'], but the value has already "
+                "been read."
+            )
+        self._environ.__delitem__(key)
+
+    def __iter__(self) -> typing.Iterator[str]:
+        return iter(self._environ)
+
+    def __len__(self) -> int:
+        return len(self._environ)
+
+
+environ = Environ()
+
+T = typing.TypeVar("T")
+
+
 class Config:
-    def __init__(self, prefix='', env_prefix='', system_env=True):
-        self.config = {}
-        self.prefix = prefix
+    def __init__(
+        self,
+        env_file: typing.Optional[typing.Union[str, Path]] = None,
+        environ: typing.Mapping[str, str] = environ,
+        env_prefix: str = "",
+    ) -> None:
+        self.environ = environ
         self.env_prefix = env_prefix
-        if system_env:
-            self.load('env')
+        self.file_values: typing.Dict[str, str] = {}
+        if env_file is not None and os.path.isfile(env_file):
+            self.file_values = self._read_file(env_file)
 
-    def _detect_system(self):
-        return platform.system().lower()
+    @typing.overload
+    def __call__(self, key: str, *, default: None) -> typing.Optional[str]:
+        ...
 
-    def _get_env_prefix_by_system(self):
-        system = self._detect_system()
-        return f'{self.env_prefix}_{system.upper()}' if self.env_prefix else system.upper()
+    @typing.overload
+    def __call__(self, key: str, cast: typing.Type[T], default: T = ...) -> T:
+        ...
 
-    def from_object(self, obj):
-        for key in dir(obj):
-            if key.isupper():
-                self.config[key] = getattr(obj, key)
+    @typing.overload
+    def __call__(
+        self, key: str, cast: typing.Type[str] = ..., default: str = ...
+    ) -> str:
+        ...
 
-    def from_env(self):
-        env_prefix = self._get_env_prefix_by_system()
-        for key, value in os.environ.items():
-            if key.startswith(env_prefix):
-                self.config[key[len(env_prefix):].upper()] = self._cast_value(value)
+    @typing.overload
+    def __call__(
+        self,
+        key: str,
+        cast: typing.Callable[[typing.Any], T] = ...,
+        default: typing.Any = ...,
+    ) -> T:
+        ...
 
-    def from_json_file(self, file_path):
+    @typing.overload
+    def __call__(
+        self, key: str, cast: typing.Type[str] = ..., default: T = ...
+    ) -> typing.Union[T, str]:
+        ...
+
+    def __call__(
+        self,
+        key: str,
+        cast: typing.Optional[typing.Callable[[typing.Any], typing.Any]] = None,
+        default: typing.Any = undefined,
+    ) -> typing.Any:
+        return self.get(key, cast, default)
+
+    def get(
+        self,
+        key: str,
+        cast: typing.Optional[typing.Callable[[typing.Any], typing.Any]] = None,
+        default: typing.Any = undefined,
+    ) -> typing.Any:
+        key = self.env_prefix + key
+        if key in self.environ:
+            value = self.environ[key]
+            return self._perform_cast(key, value, cast)
+        if key in self.file_values:
+            value = self.file_values[key]
+            return self._perform_cast(key, value, cast)
+        if default is not undefined:
+            return self._perform_cast(key, default, cast)
+        raise KeyError(f"Config '{key}' is missing, and has no default.")
+
+    def _read_file(self, file_name: typing.Union[str, Path]) -> typing.Dict[str, str]:
+        file_values: typing.Dict[str, str] = {}
+        with open(file_name) as input_file:
+            for line in input_file.readlines():
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip().strip("\"'")
+                    file_values[key] = value
+        return file_values
+
+    def _perform_cast(
+        self,
+        key: str,
+        value: typing.Any,
+        cast: typing.Optional[typing.Callable[[typing.Any], typing.Any]] = None,
+    ) -> typing.Any:
+        if cast is None or value is None:
+            return value
+        elif cast is bool and isinstance(value, str):
+            mapping = {"true": True, "1": True, "false": False, "0": False}
+            value = value.lower()
+            if value not in mapping:
+                raise ValueError(
+                    f"Config '{key}' has value '{value}'. Not a valid bool."
+                )
+            return mapping[value]
         try:
-            with open(file_path, 'r') as file:
-                data = json.load(file)
-                self.config.update(data)
-        except FileNotFoundError as e:
-            raise ConfigError(f"Config file not found: {file_path}") from e
-        except json.JSONDecodeError as e:
-            raise ConfigError(f"Error decoding JSON in config file: {file_path}") from e
-
-    def load(self, source, system_env=True):
-        if source.lower() == 'env':
-            self.from_env()
-        elif source.lower().endswith('.json'):
-            self.from_json_file(source)
-        else:
-            raise ConfigError(f"Unsupported configuration source: {source}")
-
-    def get(self, key, default=None, expected_type=None, validator=None):
-        value = self.config.get(key, default)
-        return self._validate_and_cast(value, key, expected_type, validator)
-
-    def set(self, key, value):
-        self.config[key] = self._cast_value(value)
-
-    def set_dict(self, values):
-        if not isinstance(values, dict):
-            raise ConfigError("Input must be a dictionary")
-        for key, value in values.items():
-            self.set(key, value)
-
-    def validate(self, key, validator: Callable[[Any], bool], default=None):
-        value = self.config.get(key, default)
-        if not validator(value):
-            raise ConfigError(f"Invalid value for key '{key}'")
-        return value
-
-    def get_nested(self, keys, default=None, expected_type=None, validator=None):
-        current = self.config
-        for key in keys:
-            if isinstance(current, dict) and key in current:
-                current = current[key]
-            else:
-                return default
-        return self._validate_and_cast(current, keys[-1], expected_type, validator)
-
-    def set_nested(self, keys, value):
-        current = self.config
-        for key in keys[:-1]:
-            current = current.setdefault(key, {})
-        current[keys[-1]] = self._cast_value(value)
-
-    def get_typed(self, key, expected_type: Type, default=None):
-        value = self.config.get(key, default)
-        return self._validate_and_cast(value, key, expected_type)
-
-    def get_list(self, key, delimiter=',', expected_type=None):
-        value = self.config.get(key, '')
-        items = [self._validate_and_cast(item.strip(), key, expected_type) for item in value.split(delimiter)]
-        return items
-
-    def get_dict(self, key, delimiter=':', pair_delimiter=',', key_type=None, value_type=None):
-        value = self.config.get(key, '')
-        items = [item.split(delimiter, 1) for item in value.split(pair_delimiter)]
-        result_dict = {}
-
-        for item in items:
-            if len(item) == 2:
-                key, value = item
-                key = self._validate_and_cast(key.strip(), key, key_type)
-                value = self._validate_and_cast(value.strip(), key, value_type)
-                result_dict[key] = value
-
-        return result_dict
-
-    def get_enum(self, key, enum_type: Type[Enum], default=None):
-        value = self.config.get(key, default)
-        if value is not None:
-            try:
-                return enum_type[value]
-            except KeyError:
-                raise ConfigError(f"Invalid value '{value}' for enum {enum_type.__name__}")
-
-    def _cast_value(self, value):
-        if isinstance(value, str):
-            try:
-                return json.loads(value)
-            except json.JSONDecodeError:
-                pass
-
-            if value.lower() == 'true':
-                return True
-            elif value.lower() == 'false':
-                return False
-            elif value.isdigit():
-                return int(value)
-            elif value.replace('.', '', 1).isdigit():
-                return float(value)
-        return value
-
-    def _validate_and_cast(self, value, key, expected_type, validator):
-        if expected_type and not isinstance(value, expected_type):
-            raise ConfigError(f"Invalid type for value '{value}' of key '{key}'. Expected {expected_type}")
-
-        if validator and not validator(value):
-            raise ConfigError(f"Invalid value '{value}' for key '{key}'")
-
-        return value
-
-    def reload(self, system_env=True):
-        self.config.clear()
-        self.load('env', system_env)
-
-    def export(self, format='json'):
-        if format.lower() == 'json':
-            return json.dumps(self.config, indent=2)
-        else:
-            raise ConfigError(f"Unsupported export format: {format}")
-
-    def __getitem__(self, key):
-        return self.config[key]
-
-    def __setitem__(self, key, value):
-        self.set(key, value)
-
-    def __repr__(self):
-        return repr(self.config)
+            return cast(value)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Config '{key}' has value '{value}'. Not a valid {cast.__name__}."
+            )
