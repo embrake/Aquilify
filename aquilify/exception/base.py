@@ -6,6 +6,13 @@ class HTTPException(Exception):
         self.detail = detail
         self.status_code = status_code
         super().__init__(f"{self.status_code} {self.detail}")
+        
+class HTTPBaseException(Response, HTTPException):
+    def __init__(self, details = '', status_code=500):
+        super().__init__(details, status_code=status_code)
+        
+class ImproperlyConfigured(Exception):
+    pass
 
 class NotFound(Response, HTTPException):
     def __init__(self, status_code=404):

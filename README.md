@@ -4,7 +4,7 @@
 
 ---
 
-**Documentation**: [http://www.aquilify.vvfin.in/](http://www.aquilify.vvfin.in/)
+**Documentation**: [http://www.aquilify.vvfin.in/](http://aquilify.vvfin.in/)
 
 ---
 
@@ -34,9 +34,16 @@ Aquilify was selected for its comprehensive support for asynchronous web applica
 ## Installation
 
 ```bash
-$ pip install aquilify
+pip install aquilify
 ```
 
+You'll also want to install an ASGI server, such as [netix](), [uvicorn](http://www.uvicorn.org/), [daphne](https://github.com/django/daphne/), or [hypercorn](https://pgjones.gitlab.io/hypercorn/).
+
+```shell
+$ pip install netix
+```
+
+- Netix is an ASGI Web server gateway for Aquilify, built on the top of asynchronous programming.
 ## Dependencies
 
 
@@ -49,5 +56,8 @@ Aquilify only requires `anyio`, and the following are optional:
 * [`markupsafe`][markupsafe] - Required for `Jinja2` and `CSRF` support.
 
 You can install all of these with `pip3 install aquilify[full]`.
+
+## Credits
+This project uses code adapted from the Starlette framework.
 
 <p align="center"><i>Aquilify is <a href="https://github.com/embrake/aquilify/blob/master/LICENSE">BSD licensed</a> code.<br/>Designed & crafted with care.</i></br>&mdash; ⭐️ &mdash;</p>

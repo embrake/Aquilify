@@ -224,19 +224,23 @@ class Aquilify:
                 raise InternalServerError
             
     def _helper_route_setup(self):
+        routes_to_add = []
+
         for route in routing._routes:
             path, methods, handler, strict_slashes, response_model, endpoint = route
-
-            self.routes.append(
-                (
-                    path,
-                    methods,
-                    handler,
-                    strict_slashes,
-                    response_model,
-                    endpoint,
-                )
+            route_tuple = (
+                path,
+                tuple(methods),
+                handler,
+                strict_slashes,
+                response_model,
+                endpoint,
             )
+
+            if route_tuple not in self.routes:
+                routes_to_add.append(route_tuple)
+
+        self.routes.extend(routes_to_add)
     
     def add_route(
         self,
@@ -413,7 +417,7 @@ class Aquilify:
                         return result
             except Exception as e:
                 if self.debug:
-                    await handle_exception(e)
+                    await handle_exception(e, *args)
                     print(f"Error in {stage} request stage handler: {e}")
                 else:
                     return await self._error_validator(500)
@@ -666,7 +670,7 @@ class Aquilify:
 
                             response = await handler(**handler_kwargs)
 
-                        response = await self._process_response(response)
+                        response = await self._process_response(response, handler.__name__)
 
                         if response_model:
                             response = self._validate_and_serialize_response(
@@ -710,7 +714,7 @@ class Aquilify:
             return response
         else:
             if self.debug:
-                response = await handle_exception(e)
+                response = await handle_exception(e, request)
             elif self.exception_handlers:
                 if not (inspect.iscoroutinefunction(self.exception_handlers) or inspect.isasyncgenfunction(self.exception_handlers)):
                     raise TypeError("ASGI can only register asynchronous functions or class.")
@@ -731,7 +735,8 @@ class Aquilify:
                 return value
         return str(value)
 
-    async def _process_response(self, response) -> Response:
+    async def _process_response(self, response, caller_function) -> Response:
+        caller_function_name = caller_function
         if isinstance(response, str):
             if response.startswith("<"):
                 try:
@@ -778,7 +783,7 @@ class Aquilify:
         elif not isinstance(response, Response):
             received_type = type(response).__name__
             expected_types = ", ".join([typ.__name__ for typ in [str, dict, Response]])
-            raise TypeError(f"Invalid response type: Received {received_type}. Expected types are {expected_types}.")
+            raise TypeError(f"Function '{caller_function_name}': Invalid response type: Received {received_type}. Expected types are {expected_types}.")
         return response
 
     async def _error_validator(self, error_code, *args):
@@ -922,7 +927,8 @@ class Aquilify:
             await self.handle_request(scope, receive, send)
         except Exception as e:
             if self.debug:
-                response = await handle_exception(e)
+                request = Request(scope, receive, send)
+                response = await handle_exception(e, request)
             elif self.exception_handlers:
                 if not (inspect.iscoroutinefunction(self.exception_handlers) or inspect.isasyncgenfunction(self.exception_handlers)):
                     raise TypeError("ASGI can only register asynchronous functions or class.")

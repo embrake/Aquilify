@@ -11,10 +11,8 @@ class Address(typing.NamedTuple):
     host: str
     port: int
 
-
 _KeyType = typing.TypeVar("_KeyType")
 _CovariantValueType = typing.TypeVar("_CovariantValueType", covariant=True)
-
 
 class URL:
     def __init__(
@@ -379,10 +377,6 @@ class MultiDict(ImmutableMultiDict[typing.Any, typing.Any]):
 
 
 class UploadFile:
-    """
-    An uploaded file included as part of the request data.
-    """
-
     def __init__(
         self,
         file: typing.BinaryIO,
@@ -402,7 +396,6 @@ class UploadFile:
 
     @property
     def _in_memory(self) -> bool:
-        # check for SpooledTemporaryFile._rolled
         rolled_to_disk = getattr(self.file, "_rolled", True)
         return not rolled_to_disk
 
@@ -434,10 +427,6 @@ class UploadFile:
 
 
 class FormData(ImmutableMultiDict[str, typing.Union[UploadFile, str]]):
-    """
-    An immutable multidict, containing both file uploads and text input.
-    """
-
     def __init__(
         self,
         *args: typing.Union[
@@ -456,10 +445,6 @@ class FormData(ImmutableMultiDict[str, typing.Union[UploadFile, str]]):
 
 
 class Headers(typing.Mapping[str, str]):
-    """
-    An immutable, case-insensitive multidict.
-    """
-
     def __init__(
         self,
         headers: typing.Optional[typing.Mapping[str, str]] = None,
@@ -478,8 +463,6 @@ class Headers(typing.Mapping[str, str]):
             assert scope is None, 'Cannot set both "raw" and "scope".'
             self._list = raw
         elif scope is not None:
-            # scope["headers"] isn't necessarily a list
-            # it might be a tuple or other iterable
             self._list = scope["headers"] = list(scope["headers"])
 
     @property
@@ -544,10 +527,6 @@ class Headers(typing.Mapping[str, str]):
 
 class MutableHeaders(Headers):
     def __setitem__(self, key: str, value: str) -> None:
-        """
-        Set the header `key` to `value`, removing any duplicate entries.
-        Retains insertion order.
-        """
         set_key = key.lower().encode("latin-1")
         set_value = value.encode("latin-1")
 
@@ -566,9 +545,6 @@ class MutableHeaders(Headers):
             self._list.append((set_key, set_value))
 
     def __delitem__(self, key: str) -> None:
-        """
-        Remove the header `key`.
-        """
         del_key = key.lower().encode("latin-1")
 
         pop_indexes: "typing.List[int]" = []
@@ -597,10 +573,6 @@ class MutableHeaders(Headers):
         return self._list
 
     def setdefault(self, key: str, value: str) -> str:
-        """
-        If the header `key` does not exist, then set it to `value`.
-        Returns the header value.
-        """
         set_key = key.lower().encode("latin-1")
         set_value = value.encode("latin-1")
 
@@ -615,9 +587,6 @@ class MutableHeaders(Headers):
             self[key] = val
 
     def append(self, key: str, value: str) -> None:
-        """
-        Append a header, preserving any duplicate entries.
-        """
         append_key = key.lower().encode("latin-1")
         append_value = value.encode("latin-1")
         self._list.append((append_key, append_value))
@@ -630,12 +599,6 @@ class MutableHeaders(Headers):
 
 
 class State:
-    """
-    An object that can be used to store arbitrary state.
-
-    Used for `request.state` and `app.state`.
-    """
-
     _state: typing.Dict[str, typing.Any]
 
     def __init__(self, state: typing.Optional[typing.Dict[str, typing.Any]] = None):

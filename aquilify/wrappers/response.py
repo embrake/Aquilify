@@ -131,7 +131,7 @@ class Response:
 
     async def _send_streaming_response(self, scope, receive, send):
         try:
-            if callable(self.content):
+            if self.content:
                 async for chunk in self.content(scope, receive, send):
                     await send({
                         'type': 'http.response.body',

@@ -1,19 +1,10 @@
-# This is an aquilify enviroment which used to connect the application with secret variables.
-# This is only build for system usage so, don't make any change to the default configuration.
+{ packlib.context }
 
-# Warning - If you make any change to the default enviroment it may affect your application and even broke the routing.
+export varibale = myvalue
 
-# Inbuilt enviroment module of LxEnviroment...
-
-import { enviroment } from 'LxEnviroment.env'
-
-# feed the function of export to builder and configure the secret enviroment variables.
-
-enviroment.export => (builder) = {
-    "sysMenSecretKey": "str(base64.encode('utf-8'))",
-    "sysEnviromentPath": "os.path.join('/{folder}/{project}', '.aquilify')",
-    "sysEnviromentSettings": "settings.py",
-    "__version__": "float(1.14)",
-    "__controller__": "aquilify.core.application",
-    "__name__": "aquilify",
+export varibale = {
+    "key": "value"
 }
+export varibale = [ 'data1', 'data2' ]
+
+<: comments :>

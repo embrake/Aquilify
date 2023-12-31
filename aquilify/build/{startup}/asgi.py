@@ -5,8 +5,8 @@ from aquilify.core.asgi import (
     Router
 )
 
-app = ASGI.application()
-
 os.environ['AQUILIFY_SETTINGS_MODULE'] = "settings"
+
+application = ASGI.application()
 
 Router().finalize()

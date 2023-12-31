@@ -77,7 +77,7 @@ class AxStartup:
             time.sleep(2)
             self._print_colored('Creating views file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
             time.sleep(0.1)
-            self._print_colored('Creating constructor file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
+            self._print_colored('Creating routing file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
             time.sleep(1)
             self._print_colored('Creating packlib.lxe file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
             time.sleep(0.1)
@@ -134,7 +134,7 @@ HOST = 127.0.0.1
 PORT = 8000
 DEBUG = True
 RELOAD = False
-INSTANCE = constructor:app
+INSTANCE = routing:app
 """
         config_file_path = os.path.join(app_path, 'config.cfg')
         self._write_to_file(config_file_path, config_data, "Config file")
@@ -257,7 +257,7 @@ environment.export => (builder) = {
                 port = netix_config.get('PORT', '8000')
                 debug = netix_config.getboolean('DEBUG', fallback=False)
                 reload = netix_config.getboolean('RELOAD', fallback=False)
-                instance = netix_config.get('INSTANCE', 'constructor:app')
+                instance = netix_config.get('INSTANCE', 'routing:app')
 
                 if server == 'NETIX':
                     cmd = ['netix']
@@ -282,7 +282,7 @@ environment.export => (builder) = {
                         cmd.append('--host')
                         cmd.append(host)
 
-                    cmd.append(instance.replace('__instance__', 'constructor:app'))
+                    cmd.append(instance.replace('__instance__', 'routing:app'))
                     subprocess.run(cmd)
             else:
                 self._print_colored("Oops! Either you are not in the project directory or ASGI_SERVER block may not be configured properly. Visit http://aquilify.vvfin.in/project/config/errors for help.", Colors.WARNING)

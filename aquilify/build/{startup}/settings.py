@@ -12,9 +12,13 @@ BASE_DIR = pathlib.Path(__file__).resolve().parent
 
 ENTRY_POINT = "__root__.__instance__"
 
+ASGI_APPLICATION = "project.asgi.application"
+
 SECRET_KEY = "aquilify-insecure?V(_[i=`>0IRBe_W" # replace with you own strong and secure secret key.
 # A secret key for secure session data and other cryptographic operations. 
 # Keep this key secret and unique for your application.
+
+DEFAULT_CHARCET = 'UTF-8'
 
 DEBUG = True # Disable the DEBUG mode in production usage, due to security measures.
 STRICT_SLASHES = True # Strict slashes is not implemented yet, so use the regular method to add STRICT_SLASHES

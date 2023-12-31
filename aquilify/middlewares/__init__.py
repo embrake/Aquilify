@@ -14,6 +14,8 @@ from .compression import CompressionMiddleware
 from .xfameoption import XFrameOptionsMiddleware
 from .csrfmiddleware import CSRFMiddleware as CSRFMiddleware
 from .media import MediaMiddleware as MediaMiddleware
+from .hstsmiddleware import HSTSMiddleware as HSTSMiddleware
+from .admin import ConsoleAPI as TestConsoleAPI
 
 __all__ = [
     'CORSMiddleware',
@@ -31,5 +33,7 @@ __all__ = [
     'CompressionMiddleware',
     'XFrameOptionsMiddleware',
     'CSRFMiddleware',
-    'MediaMiddleware'
+    'MediaMiddleware',
+    'HSTSMiddleware',
+    'TestConsoleAPI'
 ]

@@ -1,9 +1,9 @@
 import sys
 import typing
 
-if sys.version_info >= (3, 10):  # pragma: no cover
+if sys.version_info >= (3, 10):
     from typing import ParamSpec
-else:  # pragma: no cover
+else:
     from typing_extensions import ParamSpec
 
 from ..utils._utils import is_async_callable
