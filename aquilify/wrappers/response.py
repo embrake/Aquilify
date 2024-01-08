@@ -214,6 +214,43 @@ class Response:
 
         except Exception as e:
             await handle_exception(e)
+            
+    def _set_cookie(
+        self,
+        key: str,
+        value: str = None,
+        max_age: int = None,
+        expires: Optional[Union[int, datetime]] = None,
+        path: str = "/",
+        domain: Optional[str] = None,
+        secure: bool = False,
+        httponly: bool = False,
+        samesite: Optional[str] = None,
+    ):
+        try:
+            cookie_parts = [f"{key}={value}"]
+
+            if max_age is not None:
+                cookie_parts.append(f"Max-Age={max_age}")
+            if expires is not None:
+                if isinstance(expires, int):
+                    expires = datetime.now() + timedelta(seconds=expires)
+                cookie_parts.append(f"Expires={expires.strftime('%a, %d %b %Y %H:%M:%S GMT')}")
+            if path:
+                cookie_parts.append(f"Path={path}")
+            if domain:
+                cookie_parts.append(f"Domain={domain}")
+            if secure:
+                cookie_parts.append("Secure")
+            if httponly:
+                cookie_parts.append("HttpOnly")
+            if samesite:
+                cookie_parts.append(f"SameSite={samesite}")
+
+            self.headers["Set-Cookie"] = "; ".join(cookie_parts)
+
+        except Exception as e:
+            raise e
 
     async def delete_cookie(self, key: str):
         try:
@@ -222,6 +259,24 @@ class Response:
             self.headers["Set-Cookie"] = f"{key}=; Expires={expires}; Max-Age=0; Path=/"
         except Exception as e:
             await handle_exception(e)
+            
+    def _del_cookie(self, key, path="/", domain=None, samesite=None):
+        # Browsers can ignore the Set-Cookie header if the cookie doesn't use
+        # the secure flag and:
+        # - the cookie name starts with "__Host-" or "__Secure-", or
+        # - the samesite is "none".
+        secure = key.startswith(("__Secure-", "__Host-")) or (
+            samesite and samesite.lower() == "none"
+        )
+        self._set_cookie(
+            key,
+            max_age=0,
+            path=path,
+            domain=domain,
+            secure=secure,
+            expires=datetime(1970, 1, 1),
+            samesite=samesite,
+        )
 
     async def get_cookie(self, key: str) -> Optional[str]:
         try:

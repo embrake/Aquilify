@@ -162,10 +162,10 @@ class ConsoleAPI:
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>ConsoleAPI | Lexan - v1.1</title>
+                <title>ConsoleAPI | AQUILIFY - v1.1</title>
             </head>
             <body>
-                <h2>Welcome to Lexan ConsoleAPI - v1.1</h2>
+                <h2>Welcome to AQUILIFY ConsoleAPI - v1.1</h2>
                 <button onclick="expandCollapseAll('block')">Expand All</button>
                 <button onclick="expandCollapseAll('none')">Collapse All</button>
                 <h3>Available Routes:</h3>

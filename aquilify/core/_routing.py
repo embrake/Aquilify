@@ -74,55 +74,62 @@ class RoutingHelpers:
     @staticmethod
     def _helper_inc_path(path: str, func_include: Callable[..., Awaitable[T]]):
         for func in func_include:
-            sub_path, sub_methods, sub_handler, sub_strict_slashes, sub_response_model, sub_endpoint, sub_name = func
-            
-            if sub_handler is None or not (inspect.iscoroutinefunction(sub_handler) or inspect.isasyncgenfunction(sub_handler)):
-                raise ImproperlyConfigured("Invalid handler function provided for adding a route.")
-            
-            allowed_methods = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE"}
-            if sub_methods and not all(method.upper() in allowed_methods for method in map(str.upper, sub_methods)):
-                invalid_methods = [method for method in sub_methods if method.upper() not in allowed_methods]
-                raise ImproperlyConfigured(f"Invalid HTTP method(s) provided: {', '.join(invalid_methods)}")
+            if not len(func) == 7:
+                pass
+            else:
+                sub_path, sub_methods, sub_handler, sub_strict_slashes, sub_response_model, sub_endpoint, sub_name = func
+                
+                if sub_handler is None or not (inspect.iscoroutinefunction(sub_handler) or inspect.isasyncgenfunction(sub_handler)):
+                    raise ImproperlyConfigured("Invalid handler function provided for adding a route.")
+                
+                allowed_methods = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE"}
+                if sub_methods and not all(method.upper() in allowed_methods for method in map(str.upper, sub_methods)):
+                    invalid_methods = [method for method in sub_methods if method.upper() not in allowed_methods]
+                    raise ImproperlyConfigured(f"Invalid HTTP method(s) provided: {', '.join(invalid_methods)}")
 
-            sub_methods = sub_methods or ["GET"]
-            
-            converted_path, path_regex = Converter()._regex_converter(path + sub_path, sub_strict_slashes, '')
-            
-            if DuplicateHandler._is_duplicate_route(converted_path, sub_handler):
-                raise ImproperlyConfigured("Duplicate endpoint detected for the same route.")
-            
-            _routes.append((
-                converted_path,
-                sub_methods,
-                sub_handler,
-                path_regex,
-                sub_response_model,
-                sub_endpoint
-            ))
-            _links.append((
-                path,
-                sub_endpoint,
-                sub_name
-            ))
+                sub_methods = sub_methods or ["GET"]
+                
+                converted_path, path_regex = Converter()._regex_converter(path + sub_path, sub_strict_slashes, '')
+                
+                if DuplicateHandler._is_duplicate_route(converted_path, sub_handler):
+                    raise ImproperlyConfigured("Duplicate endpoint detected for the same route.")
+                
+                _routes.append((
+                    converted_path,
+                    sub_methods,
+                    sub_handler,
+                    path_regex,
+                    sub_response_model,
+                    sub_endpoint
+                ))
+                _links.append((
+                    path,
+                    sub_endpoint,
+                    sub_name
+                ))
+        return None
     
     @staticmethod
     def _helper_inc_websockets(path: str, func_include: Callable[..., Awaitable[T]]):
         for func in func_include:
-            sub_path, sub_handler = func
-            
-            if sub_handler is None or not (inspect.iscoroutinefunction(sub_handler) or inspect.isasyncgenfunction(sub_handler)):
-                raise ImproperlyConfigured("Invalid handler function provided for adding a websocket route.")
-            
-            converted_path, path_regex = Converter()._regex_converter(path + sub_path, False)
-            
-            if DuplicateHandler._is_duplicate_websocket(converted_path, sub_handler):
-                raise ImproperlyConfigured("Duplicate endpoint detected for the same websocket route.")
-            
-            _websockets.append((
-                converted_path,
-                path_regex,
-                sub_handler
-            ))
+            if not len(func) == 2:
+                pass
+            else:
+                sub_path, sub_handler = func
+                
+                if sub_handler is None or not (inspect.iscoroutinefunction(sub_handler) or inspect.isasyncgenfunction(sub_handler)):
+                    raise ImproperlyConfigured("Invalid handler function provided for adding a websocket route.")
+                
+                converted_path, path_regex = Converter()._regex_converter(path + sub_path, False)
+                
+                if DuplicateHandler._is_duplicate_websocket(converted_path, sub_handler):
+                    raise ImproperlyConfigured("Duplicate endpoint detected for the same websocket route.")
+                
+                _websockets.append((
+                    converted_path,
+                    path_regex,
+                    sub_handler
+                ))
             
 class HTTPRouting:
     @staticmethod
@@ -137,7 +144,7 @@ class HTTPRouting:
         include_routes = kwargs.pop('include', None)
         if include_routes:
             RoutingHelpers._helper_inc_path(path, include_routes)
-            return None
+            pass
         else:
             response_model = kwargs.pop('response_model', None)
             strict_slashes = kwargs.pop('strict_slashes', True)
@@ -171,7 +178,7 @@ class HTTPRouting:
                 kwargs.get('name')
             ))
             
-            return (converted_path, methods, endpoint, path_regex, response_model, endpoint, kwargs.get('name'))
+            return (path, methods, endpoint, strict_slashes, response_model, endpoint, kwargs.get('name'))
         
     @staticmethod
     def re_rule(
@@ -211,7 +218,7 @@ class HTTPRouting:
                 kwargs.get('name', None)
             )
         )
-        return (path_regex, methods, endpoint, path_regex_compiled, response_model, endpoint, kwargs.get('name'))
+        return (path_regex, methods, endpoint, kwargs.get('strict_slashes', False), response_model, endpoint, kwargs.get('name'))
     
     @staticmethod
     def rule_all(
@@ -257,10 +264,10 @@ class HTTPRouting:
         ))
         
         return (
-            converted_path,
+            path,
             allowed_methods,
             handler,
-            path_regex,
+            strict_slashes,
             response_model,
             endpoint,
             name
@@ -292,7 +299,7 @@ class WebsocketRouting:
             compiled_path, path_regex = Converter()._regex_converter(path, False)
             handler = endpoint
             _websockets.append((compiled_path, path_regex, handler))
-            return (compiled_path, path_regex, handler)
+            return (path, handler)
 
 class _SchematicInstance:
     def __init__(self) -> None:
@@ -441,11 +448,11 @@ class DynamicModuleLoader:
         Raises:
         - RoutingVariableError: If the routing variable is not found or not a list in the module.
         """
-        routing_var = getattr(module, f"{namespace}ROUTING", None)
+        routing_var = getattr(module, f"{namespace}ROUTER", None)
         if routing_var is None:
-            raise self.RoutingVariableError(f"No '{namespace}ROUTING' variable found in the module")
+            raise self.RoutingVariableError(f"No '{namespace}ROUTER' variable found in the module")
         if not isinstance(routing_var, list):
-            raise self.RoutingVariableError(f"'{namespace}ROUTING' variable is not a list in the module")
+            raise self.RoutingVariableError(f"'{namespace}ROUTER' variable is not a list in the module")
         return routing_var
 
     def _include(self, dotted_path: str, namespace: str = '') -> Optional[List[Any]]:

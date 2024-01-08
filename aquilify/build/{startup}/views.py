@@ -1,3 +1,0 @@
-# views.py
-
-# Define views components here...

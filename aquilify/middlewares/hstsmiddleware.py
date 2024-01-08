@@ -19,7 +19,7 @@ class HSTSMiddleware:
     def __init__(
         self,
         max_age: int = getattr(settings, 'HSTS_MAX_AGE', 31536000),
-        include_subdomains: bool = getattr(settings, 'HSTS_IncludeSubDomains', True),
+        include_subdomains: bool = getattr(settings, 'HSTS_INCLUDE_SUBDOMAINS', True),
     ) -> None:
         self._value = write_hsts_header_value(max_age, include_subdomains)
 

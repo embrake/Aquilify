@@ -51,7 +51,7 @@ def rule(
     - Optional[List[Tuple[str, EndpointType]]]: A list containing a tuple of path and endpoint.
 
     Example:
-    >>> rule('/home', home_handler, include=True, methods=['GET', 'POST'], name='home_route')
+    >>> rule('/home', home_handler, methods=['GET', 'POST'], name='home_route')
     """
     if not path.startswith('/'):
         raise ImproperlyConfigured("Paths must start with '/'.")
@@ -128,7 +128,7 @@ def re_rule(
     - Optional[List[Tuple[str, EndpointType]]]: A list containing a tuple of path and endpoint.
 
     Example:
-    >>> re_rule('/user/\\d+', user_handler, include=True, methods=['GET', 'PUT'], name='user_route')
+    >>> re_rule('/user/\\d+', user_handler, methods=['GET', 'PUT'], name='user_route')
     """
     if endpoint is None or not (inspect.iscoroutinefunction(endpoint) or inspect.isasyncgenfunction(endpoint)):
         raise ImproperlyConfigured("Invalid handler function provided for adding a route.")
@@ -151,7 +151,7 @@ def websocket(
     - endpoint (Optional[Callable[..., Awaitable[T]]]): The function to be executed for the route.
     
     Example:
-    >>> websocket('/ws', ws_handler, include=True)
+    >>> websocket('/ws', ws_handler)
     """
     handler = endpoint
     if handler is None:

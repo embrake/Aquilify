@@ -16,6 +16,7 @@ from .csrfmiddleware import CSRFMiddleware as CSRFMiddleware
 from .media import MediaMiddleware as MediaMiddleware
 from .hstsmiddleware import HSTSMiddleware as HSTSMiddleware
 from .admin import ConsoleAPI as TestConsoleAPI
+from .conditional_get import ConditionalGetMiddleware as ConditionalGetMiddleware
 
 __all__ = [
     'CORSMiddleware',
@@ -35,5 +36,6 @@ __all__ = [
     'CSRFMiddleware',
     'MediaMiddleware',
     'HSTSMiddleware',
-    'TestConsoleAPI'
+    'TestConsoleAPI',
+    'ConditionalGetMiddleware'
 ]

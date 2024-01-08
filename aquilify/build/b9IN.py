@@ -1,12 +1,15 @@
 import os
-import sys
+import re
 import shutil
 import argparse
-import inquirer
 import time
 import subprocess
 import configparser
-import pkg_resources
+
+from .fax import settings, views, asgi, __root__, routing, ax, tools, models
+from .fax.app import main as mainview
+
+from .insecure import ax_insecure_key
 
 class Colors:
     HEADER = '\033[95m'
@@ -19,11 +22,28 @@ class Colors:
     UNDERLINE = '\033[4m'
 
 class AxStartup:
-    VERSION = "Aquilify v1.13 (Stable)"
+    VERSION = ax.AX_VERSION
     CONFIG_FILE = 'config.cfg'
 
     def __init__(self):
         self.parser = self._setup_arg_parser()
+        
+    def measure_time(self, func):
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            func(*args, **kwargs)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            return elapsed_time
+        return wrapper
+    
+    def create_file(self, file_path, content=None):
+        try:
+            with open(file_path, 'a') as f:
+                if content:
+                    f.write(content)
+        except Exception as e:
+            raise e
 
     def _setup_arg_parser(self):
         parser = argparse.ArgumentParser(description="Create an app with specified name and copy project files.")
@@ -46,15 +66,17 @@ class AxStartup:
             if os.path.exists(app_path):
                 self._handle_existing_app(app_path, app_name)
             else:
+                current_dir = os.getcwd()
+                project_dir = os.path.join(current_dir, app_name)
+                os.makedirs(project_dir, exist_ok=True)
                 self._copy_project_files(app_name, app_path)
         except Exception as e:
             self._print_colored(f"Error: {e}", Colors.FAIL)
 
     def _handle_existing_app(self, app_path, app_name):
-        overwrite = inquirer.prompt([
-            inquirer.Confirm('overwrite', message=f"{Colors.WARNING}App folder '{app_name}' already exists. Do you want to overwrite it?{Colors.ENDC}", default=False)
-        ])
-        if overwrite['overwrite']:
+        overwrite = str(input(f"{Colors.WARNING}App folder '{app_name}' already exists. Do you want to overwrite it?{Colors.ENDC} "))
+        
+        if overwrite in ("YES", 'Yes', 'Y', 'y'):
             self._overwrite_existing_app(app_path, app_name)
         else:
             self._print_bold("Operation aborted. Please choose a different app name.")
@@ -62,6 +84,9 @@ class AxStartup:
     def _overwrite_existing_app(self, app_path, app_name):
         try:
             shutil.rmtree(app_path)
+            current_dir = os.getcwd()
+            project_dir = os.path.join(current_dir, app_name)
+            os.makedirs(project_dir, exist_ok=True)
             self._copy_project_files(app_name, app_path)
             self._print_colored(f"Project '{app_name}' overwritten successfully.", Colors.OKGREEN)
         except (OSError, shutil.Error) as e:
@@ -69,45 +94,7 @@ class AxStartup:
 
     def _copy_project_files(self, app_name, app_path):
         try:
-            self._print_colored('Setting up Project {} in {} \n'.format(app_name, os.getcwd()), Colors.OKGREEN)
-            time.sleep(1)
-            self._print_colored('Creating __root__ file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
-            time.sleep(0.1)
-            self._print_colored('Creating settings file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
-            time.sleep(2)
-            self._print_colored('Creating views file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
-            time.sleep(0.1)
-            self._print_colored('Creating routing file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
-            time.sleep(1)
-            self._print_colored('Creating packlib.lxe file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
-            time.sleep(0.1)
-            self._print_colored('Creating config.cfg file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
-            time.sleep(2)
-            self._print_colored('Creating __init__ file in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
-            time.sleep(0.1)
-            self._print_colored('Creating app folder in {}'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
-            time.sleep(2)
-            self._print_colored('Creating app/main file in {}'.format(os.getcwd() + '/{}/app'.format(app_name)), Colors.OKGREEN)
-            time.sleep(0.1)
-            self._print_colored('Creating app/__init__ file in {}'.format(os.getcwd() + '/{}/app'.format(app_name)), Colors.OKGREEN)
-            time.sleep(0.1)
-            self._print_colored('Creating requirements.txt file in {} \n'.format(os.getcwd() + '/{}'.format(app_name)), Colors.OKGREEN)
-            time.sleep(0.8)
-            self._print_colored('Installing middleware dependencies...', Colors.OKGREEN)
-            time.sleep(3)
-            self._print_colored('Middlewares setup completed \n', Colors.OKGREEN)
-            time.sleep(0.3)
-            self._print_colored('Installing utilities...', Colors.OKGREEN)
-            time.sleep(3)
-            self._print_colored('Utilities setup completed. \n', Colors.OKGREEN)
-            time.sleep(0.3)
-            self._print_colored('Analyzing project setup...', Colors.OKGREEN)
-            time.sleep(0.1)
-            self._print_colored('Finilize the project setup...', Colors.OKGREEN)
-            time.sleep(0.3)
-
-            _project_b9IN = "aquilify/build/{startup}"
-            self._copy_package_files('aquilify', _project_b9IN, app_path)
+            self._copy_package_files(app_name, app_path)
                         
             self._create_config_file(app_path)
             self._create_packlib_file(app_path)
@@ -116,7 +103,7 @@ class AxStartup:
 
             if os.path.exists(config_file):
                 self._update_config_file(config_file, app_name, app_path)
-            self._print_colored(f"\nProject '{app_name}' created successfully. \n", Colors.OKGREEN)
+            print(f"\nProject '{Colors.OKGREEN}{app_name}{Colors.ENDC}' created successfully. \n")
         except (OSError, shutil.Error) as e:
             self._print_colored(f"Failed to create app '{app_name}': {e}", Colors.FAIL)
 
@@ -134,7 +121,7 @@ HOST = 127.0.0.1
 PORT = 8000
 DEBUG = True
 RELOAD = False
-INSTANCE = routing:app
+INSTANCE = asgi:application
 """
         config_file_path = os.path.join(app_path, 'config.cfg')
         self._write_to_file(config_file_path, config_data, "Config file")
@@ -155,10 +142,9 @@ environment.export => (builder) = {
     "sysMenSecretKey": "str(base64.encode('utf-8'))",
     "sysEnvironmentPath": "os.path.join('/{folder}/{project}', '.aquilify')",
     "sysEnvironmentSettings": "settings.py",
-    "__version__": "float(1.13)",
+    "__version__": "float(1.14)",
     "__controller__": "aquilify.core.application",
-    "__name__": "aquilify",
-    "__versionControl__": "git.aquilify.commit"
+    "__name__": "aquilify"
 }
 """
         packlib_file_path = os.path.join(app_path, 'packlib.lxe')
@@ -168,22 +154,55 @@ environment.export => (builder) = {
         try:
             with open(file_path, 'w') as file:
                 file.write(data)
-            self._print_colored(f"{file_type} created successfully.", Colors.OKGREEN)
+            print(f"{file_type} {file_path} ...{Colors.OKGREEN}200{Colors.ENDC}")
         except Exception as e:
             self._print_colored(f"Failed to create {file_type.lower()}: {e}", Colors.FAIL)
-
-    def _copy_package_files(self, package_name, source_folder, destination_folder):
+    
+    def _copy_package_files(self, app_name, app_path):
         try:
-            package = pkg_resources.get_distribution(package_name)
-            package_path = package.location
+            files = ['__init__.py', 'views.py', 'settings.py', 'asgi.py', 'models.py', 'tools.py', 'routing.py', '__root__.py', 'config.cfg', 'packlib.lxe']
+            total_time = 0
 
-            folder_to_copy = os.path.join(package_path, *source_folder.split('/'))
+            for file in files:
+                file_path = os.path.join(app_path, file)
+                try:
+                    content = None
+                    if file == 'settings.py':
+                        content = settings.SETTINGS % ax_insecure_key()
+                    elif file == 'views.py':
+                        content = views.VIEWS
+                    elif file == '__root__.py':
+                        content = __root__.ROOT
+                    elif file == 'routing.py':
+                        content = routing.ROUTING
+                    elif file == 'asgi.py':
+                        content = asgi.ASGI
+                    elif file == 'tools.py':
+                        content = tools.TOOLS
+                    elif file == 'models.py':
+                        content = models.MODLES
 
-            shutil.copytree(folder_to_copy, destination_folder)
-        except pkg_resources.DistributionNotFound:
-            print(f"Package '{package_name}' not found.")
-        except FileNotFoundError:
-            print(f"Source folder '{source_folder}' not found.")
+                    self.create_file(file_path, content)
+                    elapsed_time = self.measure_time(self.create_file)(file_path)
+                    total_time += elapsed_time
+
+                    print(f"Created file: {file_path} ...{Colors.OKGREEN}200{Colors.ENDC}")
+                except Exception as e:
+                    raise e
+            for folder_name in ['app', 'lifespan']:
+                folder_path = os.path.join(app_path, folder_name)
+                os.makedirs(folder_path, exist_ok=True)
+                print(f"Created folder: {folder_path} ...{Colors.OKGREEN}200{Colors.ENDC}")
+                
+                if folder_name == 'app':
+                    main_py_path = os.path.join(folder_path, 'main.py')
+                    self.create_file(main_py_path, mainview.SCHEMATIC)
+                    self.create_file(os.path.join(folder_path, '__init__.py'))
+                    print(f"Created folder: {main_py_path} ...{Colors.OKGREEN}200{Colors.ENDC}")
+                elif folder_name == 'lifespan':
+                    self.create_file(os.path.join(folder_path, '__init__.py'))
+                    print(f"Created file: {os.path.join(folder_path, '__init__.py')} ...{Colors.OKGREEN}200{Colors.ENDC}")
+                    
         except Exception as e:
             print(f"An error occurred: {e}")
 
@@ -194,7 +213,7 @@ environment.export => (builder) = {
 
             if 'Aquilify' in config:
                 config.set('Aquilify', 'PATH', project_path)
-                config.set('Aquilify', 'VERSION', '1.13')
+                config.set('Aquilify', 'VERSION', '1.14')
                 config.set('Aquilify', 'COMPILER_PATH', project_path + '/.aquilify')
                 config.set('Aquilify', 'PROJECT_NAME', app_name)
                 config.set('Aquilify', 'SETTINGS', project_path  + '/settings.py')
@@ -202,22 +221,17 @@ environment.export => (builder) = {
                 with open(config_file, 'w') as configfile:
                     config.write(configfile)
                 
-                self._print_colored("Config file updated successfully.", Colors.OKGREEN)
+                print(f"Update {config_file} ...{Colors.OKGREEN}200{Colors.ENDC}")
             else:
                 self._print_colored("Aquilify section not found in the config file.", Colors.WARNING)
         except Exception as e:
             self._print_colored(f"Failed to update config file: {e}", Colors.FAIL)
-
+            
     def _install_electrus(self):
         try:
             subprocess.run(["pip", "install", "electrus"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self._print_colored('Installing https://github.com/embrake/electrus/branch/main...', Colors.OKGREEN)
-            time.sleep(1)
-            self._print_colored('Extracting electrus.zip...', Colors.OKGREEN)
-            time.sleep(0.1)
-            self._print_colored('Setting up wheel {}... \n'.format(sys.prefix), Colors.OKGREEN)
-            time.sleep(1)
-            self._print_colored("Electrus installed successfully.", Colors.OKGREEN)
+            print(f'Installing https://pypi.org/project/electrus/ ...{Colors.OKGREEN}200{Colors.ENDC}')
+            print(f"Electrus installed successfully ...{Colors.OKGREEN}200{Colors.ENDC}")
         except subprocess.CalledProcessError as e:
             self._print_colored(f"Failed to install Electrus: {e.stderr.decode('utf-8')}", Colors.FAIL)
 
@@ -231,19 +245,22 @@ environment.export => (builder) = {
         args = self.parser.parse_args()
 
         if args.version:
-            self._print_colored(self.VERSION, Colors.OKGREEN)
-            return
+            for version in self.VERSION:              
+                print(version)
+            return  
 
         if args.command == "create-app":
-            self._print_colored('\n *************************** Welcome to AQUILIFY *************************** \n', Colors.OKGREEN)
+            self._print_colored(ax.AQUILIFY_THEME, Colors.OKGREEN)
             if args.app_name:
                 self._create_app(args.app_name)
             else:
-                self._create_app_interactively()
+                self._create_app_basic()
         elif args.command == "runserver":
             self._run_server()
         else:
             self.parser.print_help()
+        
+        return
 
     def _run_server(self):
         try:
@@ -288,30 +305,41 @@ environment.export => (builder) = {
                 self._print_colored("Oops! Either you are not in the project directory or ASGI_SERVER block may not be configured properly. Visit http://aquilify.vvfin.in/project/config/errors for help.", Colors.WARNING)
 
         except Exception as e:
-            self._print_colored(f"An error occurred while running the server: {e}", Colors.FAIL)
+            self._print_colored(f"An error occurred while running the server, either {server} isn't installed or sys error!: {e}", Colors.FAIL)
         except KeyboardInterrupt as e:
             pass
-        
-    def _create_app_interactively(self):
-        questions = [
-            inquirer.Text('app_name', message="Enter the name of the app", validate=lambda _, x: self._validate_app_name(_, x)),
-            inquirer.List('setup_db', message="Would you like to set up Electrus database", choices=['Yes', 'No'], default='Yes', carousel=True),
-        ]
-        answers = inquirer.prompt(questions)
-        if answers:
-            self._create_app(answers['app_name'])
-            if answers['setup_db'] == 'Yes':
-                self._print_colored("Installing Electrus... \n", Colors.OKGREEN)
-                try:
-                    self._install_electrus()
-                except Exception as e:
-                    self._print_colored(f"Error while installing Electrus: {e}", Colors.FAIL)
-        else:
-            self._print_colored("Invalid app name.", Colors.FAIL)
 
     def _print_bold(self, message):
         print(f"{Colors.BOLD}{message}{Colors.ENDC}")
+        
+    def _create_app_basic(self):
+        app_name = input("Enter the name of the app: ").strip()
+        if not app_name:
+            self._print_colored("App name can't be empty!", Colors.FAIL)
+            return self._create_app_basic()
 
+        if not re.match(r'^[\w\-.]+$', app_name):
+            self._print_colored("Invalid project name. Use only letters, numbers, underscores, hyphens, and periods.", Colors.FAIL)
+            return
+
+        if not self._validate_app_name('', app_name):
+            return
+
+        setup_db = input("Would you like to set up Electrus database (Yes/No): ").strip().lower()
+        
+        if setup_db not in ("yes", "no"):
+            self._print_colored("Invalid value received: {}. Use either Yes or No.".format(setup_db), Colors.FAIL)
+            return
+
+        if setup_db == "yes":
+            self._print_colored("Installing Electrus... \n", Colors.OKGREEN)
+            try:
+                self._install_electrus()
+            except Exception as e:
+                self._print_colored(f"Error while installing Electrus: {e}", Colors.FAIL)
+
+        self._create_app(app_name)
+            
 def main():
     cls = AxStartup().start()
     return cls

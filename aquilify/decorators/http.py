@@ -11,7 +11,7 @@ import asyncio
 ErrorHandler = Union[Callable[[Request], str], Awaitable[Callable[[Request], str]]]
 AllowedMethods = Union[List[str], Dict[str, List[str]]]
 
-def require_http(methods: AllowedMethods, error_handler: ErrorHandler = None):
+def require_http_method(methods: AllowedMethods, error_handler: ErrorHandler = None):
     def decorator(func: Callable[..., Awaitable[JsonResponse]]):
         @wraps(func)
         async def wrapper(request: Request, *args, **kwargs) -> JsonResponse:

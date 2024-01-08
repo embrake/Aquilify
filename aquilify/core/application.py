@@ -44,6 +44,10 @@ from ..exception.debug import (
     debug_405
 )
 
+from aquilify.exception.base import (
+    ImproperlyConfigured
+)
+
 from ..views.urlI8N import urlI8N
 
 from ..types import (
@@ -55,7 +59,7 @@ from ..types import (
     StatefulLifespan
 )
 
-from ..utils.reqparser import Reqparser
+from ..wrappers.reqparser import Reqparser
 from ..exception.__handler import handle_exception
 from ..config import Config
 from .schematic import Schematic
@@ -67,8 +71,10 @@ from .__globals import (
     fetchSettingsMiddleware
 )
 
-from ..responses import HTMLResponse
-from ..settings.lifespan import ASGILifespanLoader
+from aquilify.responses import HTMLResponse
+from aquilify.settings.lifespan import ASGILifespanLoader
+from aquilify.settings import settings
+from aquilify.utils.module_loading import import_string
 
 from .__status import exception_dict
 
@@ -157,6 +163,7 @@ class Aquilify:
         self.settings_stage_handler.process_stage_handlers(self)
         fetchSettingsMiddleware(self)
         self._check_lifespan_settings()
+        self._load_exception_handler()
 
     def errorhandler(self, status_code: int) -> Callable:
         def decorator(handler: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
@@ -176,8 +183,8 @@ class Aquilify:
         We no longer document this decorator style API, and its usage is discouraged.
         Instead you should use the following approach:
 
-        >>> ROUTING = [
-                routing.route('/', methods=['GET', 'POST'], endpoint=home)
+        >>> ROUTER = [
+                rule('/', methods=['GET', 'POST'], endpoint=home)
             ]
         """
         warnings.warn(
@@ -716,8 +723,6 @@ class Aquilify:
             if self.debug:
                 response = await handle_exception(e, request)
             elif self.exception_handlers:
-                if not (inspect.iscoroutinefunction(self.exception_handlers) or inspect.isasyncgenfunction(self.exception_handlers)):
-                    raise TypeError("ASGI can only register asynchronous functions or class.")
                 response = await self.exception_handlers(e, request)
             else:
                 response = await self._error_validator(500)
@@ -903,7 +908,38 @@ class Aquilify:
                     expected_types = ", ".join([typ.__name__ for typ in [WebSocket]])
                     raise TypeError(f"Invalid response type: Received {received_type}. Expected types are {expected_types}.")
                 return response
-
+            
+    def _load_exception_handler(self) -> Optional[
+            Mapping[
+                Any,
+                Callable[
+                    [Request, Exception],
+                    Union[Response, Awaitable[Response]],
+                ],
+            ]
+        ]:
+        try:
+            exception_handler: Optional[str] = getattr(settings, 'EXCEPTION_HANDLER', None)
+            if exception_handler is not None:
+                if not isinstance(exception_handler, str):
+                    raise ImproperlyConfigured("Invalid exception_handler type, excepted string")
+            if exception_handler:
+                _handler = import_string(exception_handler)
+                if inspect.isclass(_handler):
+                    self.exception_handlers = _handler()
+                else:
+                    if not (inspect.iscoroutinefunction(_handler) or inspect.isasyncgenfunction(_handler)):
+                        raise TypeError("ASGI can only register asynchronous functions or class of Exception handler.")
+                    self.exception_handlers = _handler
+            else:
+                self.exception_handlers = None 
+        except ImproperlyConfigured as config_error:
+            raise ImproperlyConfigured(f"Error loading {exception_handler} Exception handler: {config_error}")
+        except ImportError as import_error:
+            raise ImproperlyConfigured(f"Error importing {exception_handler} Exception handler: {import_error}")
+        except Exception as e:
+            raise ImproperlyConfigured(f"An unexpected error occurred: {e}")
+        
     async def __call__(
         self, scope: Dict[str, Scope], receive: Callable[..., Awaitable[Receive]], send: Callable[..., Awaitable[Send]]
     ) -> None:
@@ -930,8 +966,6 @@ class Aquilify:
                 request = Request(scope, receive, send)
                 response = await handle_exception(e, request)
             elif self.exception_handlers:
-                if not (inspect.iscoroutinefunction(self.exception_handlers) or inspect.isasyncgenfunction(self.exception_handlers)):
-                    raise TypeError("ASGI can only register asynchronous functions or class.")
                 request = Request(scope, receive, send)
                 response = await self.exception_handlers(e, request)
             else:
