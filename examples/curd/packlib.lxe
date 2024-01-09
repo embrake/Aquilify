@@ -1,0 +1,19 @@
+# This is an aquilify environment which is used to connect the application with secret variables.
+# This is only built for system usage so, don't make any changes to the default configuration.
+
+# Warning - If you make any changes to the default environment, it may affect your application and even break the routing.
+
+# Inbuilt environment module of LxEnvironment...
+
+import { environment } from 'LxEnvironment.env'
+
+# Feed the export function to builder and configure the secret environment variables.
+
+environment.export => (builder) = {
+    "sysMenSecretKey": "str(base64.encode('utf-8'))",
+    "sysEnvironmentPath": "os.path.join('/{folder}/{project}', '.aquilify')",
+    "sysEnvironmentSettings": "settings.py",
+    "__version__": "float(1.14)",
+    "__controller__": "aquilify.core.application",
+    "__name__": "aquilify"
+}
