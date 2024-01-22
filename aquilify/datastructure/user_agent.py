@@ -76,9 +76,9 @@ class UserAgentParser:
         operating_systems = {
             'Windows': r'Windows NT ([0-9.]+)',
             'Android': r'Android ([0-9.]+)',
-            'Linux': r'Linux',
+            'Linux': r'Linux ([0-9_]+)',
             'iOS': r'OS ([0-9_]+) like Mac',
-            'Mac': r'Mac OS X ([0-9_]+)'
+            'Mac': r'Mac OS X '
         }
         for os, pattern in operating_systems.items():
             match = re.search(pattern, self.user_agent_string)

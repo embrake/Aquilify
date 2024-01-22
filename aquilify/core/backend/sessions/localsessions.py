@@ -12,11 +12,6 @@ except ImportError:
 
 import http.client
 
-try:
-    from itsdangerous import URLSafeTimedSerializer
-except ImportError:
-    URLSafeTimedSerializer, BadSignature = None
-
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, Callable, List, Tuple
 
@@ -32,7 +27,6 @@ class SessionManager:
         secret_key: Optional[str] = None,
         session_folder: str = 'sessions',
         session_lifetime: timedelta = timedelta(hours=1),
-        session_permanent: bool = True,
         encryption_key: Optional[str] = None,
         timeout_handler: Optional[Callable[[Dict[str, Any]], None]] = None,
         rotate_sessions: bool = False,
@@ -42,10 +36,8 @@ class SessionManager:
     ) -> None:
 
         self.secret_key = secret_key or secrets.token_urlsafe(32)
-        self.serializer = URLSafeTimedSerializer(self.secret_key)
         self.session_folder = session_folder
         self.session_lifetime = session_lifetime
-        self.session_permanent = session_permanent
         self.loaded_session = None
         self.encryption_key = encryption_key
         self.timeout_handler = timeout_handler
@@ -167,9 +159,6 @@ class SessionManager:
 
     def set_session_id_prefix(self, prefix: str) -> None:
         self.session_id_prefix = prefix
-
-    def set_custom_serializer(self, serializer: URLSafeTimedSerializer) -> None:
-        self.serializer = serializer
 
     async def session_exists(self, session_id: str) -> bool:
         session_file = os.path.join(self.session_folder, session_id)

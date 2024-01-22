@@ -2,14 +2,9 @@ import secrets
 import logging
 import asyncio
 
-from functools import wraps
-from typing import Optional
 from datetime import datetime, timedelta
-from itsdangerous import (
-    URLSafeTimedSerializer,
-    BadTimeSignature,
-    SignatureExpired
-)
+
+from aquilify.core import signing
 
 from ..wrappers import Request, Response
 
@@ -66,7 +61,7 @@ class CSRF:
         self.rate_limiter = RateLimiter(max_requests=self.rate_limit["max_requests"], time_window=self.rate_limit["time_window"]) if self.rate_limit else None
         self.max_token_lifetime = _settings['options'].get('max_token_lifetime') or timedelta(days=7)
         self.token_refresh_interval = _settings['options'].get('token_refresh_interval') or timedelta(days=6)
-        self.serializer = URLSafeTimedSerializer(self.secret_key)
+        self.serializer = signing
         self.revoked_tokens = set()
 
         assert _settings.get('backend') == 'aquilify.security.csrf.CSRF', "Invalid backend for CSRF Protection."
@@ -74,7 +69,7 @@ class CSRF:
     async def generate_csrf_token(self, client_ip: str) -> str:
         token = secrets.token_hex(32)
         csrf_data = {"token": token, "ip": client_ip, "_created": datetime.utcnow().timestamp()}
-        csrf_token = await asyncio.to_thread(self.serializer.dumps, csrf_data)
+        csrf_token = await asyncio.to_thread(self.serializer.dumps, csrf_data, self.secret_key)
         self.logger.info(f"CSRF token generated for IP {client_ip}")
         return csrf_token
 
@@ -108,7 +103,7 @@ class CSRF:
                 return False
 
             decoded_csrf_token = await asyncio.to_thread(self.serializer.loads, csrf_token)
-            decoded_submitted_token = await asyncio.to_thread(self.serializer.loads, submitted_token)
+            decoded_submitted_token = await asyncio.to_thread(self.serializer.loads, submitted_token, self.secret_key)
 
             if self.ip_verification and decoded_csrf_token.get("ip") != request.client.host:
                 self.logger.warning("CSRF token validation failed: IP address mismatch.")
@@ -119,7 +114,7 @@ class CSRF:
                 return False
 
             return csrf_token is not None and decoded_csrf_token == decoded_submitted_token
-        except (BadTimeSignature, SignatureExpired) as e:
+        except (signing.BadSignature, signing.SignatureExpired) as e:
             self.logger.warning(f"CSRF token validation failed: {e}")
             return False
         except Exception as e:
@@ -131,7 +126,7 @@ class CSRF:
             return True
 
         try:
-            token_data = await asyncio.to_thread(self.serializer.loads, csrf_token)
+            token_data = await asyncio.to_thread(self.serializer.loads, csrf_token, self.secret_key)
             created_time = datetime.fromtimestamp(token_data["_created"])
             return (current_time - created_time) <= self.max_token_lifetime
         except Exception as e:
@@ -143,7 +138,7 @@ class CSRF:
             return False
 
         try:
-            token_data = await asyncio.to_thread(self.serializer.loads, csrf_token)
+            token_data = await asyncio.to_thread(self.serializer.loads, csrf_token, self.secret_key)
             created_time = datetime.fromtimestamp(token_data["_created"])
             return (datetime.utcnow() - created_time) >= self.token_refresh_interval
         except Exception as e:

@@ -3,10 +3,7 @@ import base64
 
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
-try:
-    from itsdangerous import URLSafeSerializer, BadSignature
-except ImportError:
-    URLSafeSerializer, BadSignature = None, None
+from aquilify.core import signing
 
 from aquilify.wrappers import Request, Response
 from aquilify.settings.sessions import SessionConfigSettings
@@ -15,14 +12,12 @@ from aquilify.settings import settings
 
 _settings = SessionConfigSettings()
 
-_serilizer = URLSafeSerializer(_settings.fetch().get('secret_key'))
-
 class BeforeSessionStage:
     def __init__(
         self
     ) -> None:
         self.sessions: Dict[str] = {}
-        self.serializer: URLSafeSerializer = _serilizer
+        self.serializer = signing
         self.session_lifetime: timedelta = timedelta(minutes=_settings.fetch().get('session_lifetime'))
         self.cookie_name: str = _settings.fetch().get('cookie_name')
 
@@ -50,8 +45,8 @@ class BeforeSessionStage:
     def _get_session_id(self, signed_session_id: Optional[str]) -> Optional[str]:
         if signed_session_id:
             try:
-                return self.serializer.loads(signed_session_id)
-            except BadSignature:
+                return self.serializer.loads(signed_session_id, settings.SECRET_KEY, max_age=_settings.fetch().get('max_age'))
+            except signing.BadSignature:
                 pass
         return None
 
@@ -79,7 +74,7 @@ class AfterSessionStage:
     def __init__(
         self
     ) -> None:
-        self.serializer: URLSafeSerializer = _serilizer
+        self.serializer = signing
         self.max_age: int = _settings.fetch().get('max_age')
         self.secure: bool = _settings.fetch().get('secure')
         self.httponly: bool = _settings.fetch().get('httponly')
@@ -95,7 +90,7 @@ class AfterSessionStage:
         return response
 
     async def _set_cookie(self, response: Response, session_id: str) -> None:
-        signed_session_id = self.serializer.dumps(session_id)
+        signed_session_id = self.serializer.dumps(session_id, settings.SECRET_KEY)
         await response.set_cookie(
             self.cookie_name,
             signed_session_id,

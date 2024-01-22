@@ -1,7 +1,5 @@
 ASGI = """import os
 
-{}
-
 from aquilify.core.asgi import (
     ASGI,
     Router
@@ -23,4 +21,4 @@ application: Aquilify = ASGI.application()
 # to ensure they are properly configured before finalizing the route to the web.
 
 Router().finalize()
-""".format("""It exposes the ASGI callable as a module-level variable named ``application``.""")
+"""
