@@ -14,34 +14,24 @@ try:
 except ModuleNotFoundError:  # pragma: nocover
     jinja2 = None  # type: ignore[assignment]
 
-from aquilify.settings.templates import TemplateConfigSettings
-
-try:
-    _config_settings = TemplateConfigSettings()
-    _config_settings.fetch()
-    _settings = _config_settings.template_data[0]
-except Exception as e:
-    raise Exception("Template settings not found in settings.py, configure it before you use.")
-
 class _TemplateResponse(HTMLResponse):
     def __init__(
         self,
         template: typing.Any,
         context: typing.Dict[str, typing.Any],
         status_code: int = 200,
-        headers: typing.Optional[typing.Mapping[str, str]] = None,
-        content_type: typing.Optional[str] = None
+        headers: typing.Optional[typing.Mapping[str, str]] = None
     ):
         self.template = template
         self.context = context
         content = template.render(context)
-        super().__init__(content, status_code, headers, content_type)
+        super().__init__(content, status_code, headers)
 
 class Jinja2Templates:
     """
     templates = Jinja2Templates("templates")
 
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.render("index.html", {"request": request})
     """
 
     @typing.overload
@@ -52,6 +42,9 @@ class Jinja2Templates:
         context_processors: typing.Optional[
             typing.List[typing.Callable[[Request], typing.Dict[str, typing.Any]]]
         ] = None,
+        autoscape: typing.Optional[bool] = True,
+        extensions: typing.Sequence[str | type["jinja2.ext.Extension"]] = (),
+        cache_size: typing.Optional[str] = 400, 
         **env_options: typing.Any,
     ) -> None:
         ...
@@ -64,17 +57,23 @@ class Jinja2Templates:
         context_processors: typing.Optional[
             typing.List[typing.Callable[[Request], typing.Dict[str, typing.Any]]]
         ] = None,
+        autoscape: typing.Optional[bool] = True,
+        extensions: typing.Sequence[str | type["jinja2.ext.Extension"]] = (),
+        cache_size: typing.Optional[str] = 400 
     ) -> None:
         ...
 
     def __init__(
         self,
-        directory: "typing.Union[str, PathLike[typing.AnyStr], typing.Sequence[typing.Union[str, PathLike[typing.AnyStr]]], None]" = _settings.get('dirs') or None,  # noqa: E501
+        directory: "typing.Union[str, PathLike[typing.AnyStr], typing.Sequence[typing.Union[str, PathLike[typing.AnyStr]]], None]" = None,  # noqa: E501
         *,
         context_processors: typing.Optional[
             typing.List[typing.Callable[[Request], typing.Dict[str, typing.Any]]]
-        ] = _settings['options'].get('context_processors') or None,
-        env: typing.Optional["jinja2.Environment"] = _settings['options'].get('enviroment') or None,
+        ] = None,
+        env: typing.Optional["jinja2.Environment"] = None,
+        autoscape: typing.Optional[bool] = True,
+        extensions: typing.Sequence[str | type["jinja2.ext.Extension"]] = (),
+        cache_size: typing.Optional[str] = 400, 
         **env_options: typing.Any,
     ) -> None:
         if env_options:
@@ -84,11 +83,10 @@ class Jinja2Templates:
             )
         assert jinja2 is not None, "jinja2 must be installed to use Jinja2Templates"
         assert directory or env, "either 'directory' or 'env' arguments must be passed"
-        assert _settings.get('backend') != 'aquilify.template.jinja2', "Aquilify currently support Jinj2 as template engine"
         self.context_processors = context_processors or []
-        self.autoscape =  _settings['options'].get('autoscape') or True
-        self.extensions =  _settings['options'].get('extensions') or ()
-        self.cache_size =  _settings['options'].get('cache_size') or 400
+        self.autoscape =  autoscape
+        self.extensions = extensions
+        self.cache_size = cache_size
         if directory is not None:
             self.env = self._create_env(directory, **env_options)
         elif env is not None:
@@ -111,29 +109,27 @@ class Jinja2Templates:
         return self.env.get_template(name)
 
     @typing.overload
-    async def TemplateResponse(
+    async def render(
         self,
         request: Request,
         name: str,
         context: typing.Optional[typing.Dict[str, typing.Any]] = None,
         status_code: int = 200,
-        headers: typing.Optional[typing.Mapping[str, str]] = None,
-        content_type: typing.Optional[str] = None
+        headers: typing.Optional[typing.Mapping[str, str]] = None
     ) -> _TemplateResponse:
         ...
 
     @typing.overload
-    async def TemplateResponse(
+    async def render(
         self,
         name: str,
         context: typing.Optional[typing.Dict[str, typing.Any]] = None,
         status_code: int = 200,
-        headers: typing.Optional[typing.Mapping[str, str]] = None,
-        content_type: typing.Optional[str] = None
+        headers: typing.Optional[typing.Mapping[str, str]] = None
     ) -> _TemplateResponse:
         ...
 
-    async def TemplateResponse(
+    async def render(
         self, *args: typing.Any, **kwargs: typing.Any
     ) -> _TemplateResponse:
         if args:
@@ -143,7 +139,7 @@ class Jinja2Templates:
                 warnings.warn(
                     "The `name` is not the first parameter anymore. "
                     "The first parameter should be the `Request` instance.\n"
-                    'Replace `TemplateResponse(name, {"request": request})` by `TemplateResponse(request, name)`.',  # noqa: E501
+                    'Replace `render(name, {"request": request})` by `render(request, name)`.',  # noqa: E501
                     DeprecationWarning,
                 )
 
@@ -153,7 +149,6 @@ class Jinja2Templates:
                     args[2] if len(args) > 2 else kwargs.get("status_code", 200)
                 )
                 headers = args[2] if len(args) > 2 else kwargs.get("headers")
-                content_type = args[3] if len(args) > 3 else kwargs.get("content_type")
 
                 if "request" not in context:
                     raise ValueError('context must include a "request" key')
@@ -166,12 +161,11 @@ class Jinja2Templates:
                     args[3] if len(args) > 3 else kwargs.get("status_code", 200)
                 )
                 headers = args[4] if len(args) > 4 else kwargs.get("headers")
-                content_type = args[5] if len(args) > 5 else kwargs.get("content_type")
         else:  # all arguments are kwargs
             if "request" not in kwargs:
                 warnings.warn(
-                    "The `TemplateResponse` now requires the `request` argument.\n"
-                    'Replace `TemplateResponse(name, {"context": context})` by `TemplateResponse(request, name)`.',  # noqa: E501
+                    "The `render` now requires the `request` argument.\n"
+                    'Replace `render(name, {"context": context})` by `render(request, name)`.',  # noqa: E501
                     DeprecationWarning,
                 )
                 if "request" not in kwargs.get("context", {}):
@@ -182,7 +176,6 @@ class Jinja2Templates:
             name = typing.cast(str, kwargs["name"])
             status_code = kwargs.get("status_code", 200)
             headers = kwargs.get("headers")
-            content_type = kwargs.get("content_type")
 
         context.setdefault("request", request)
         for context_processor in self.context_processors:
@@ -193,6 +186,5 @@ class Jinja2Templates:
             template,
             context,
             status_code=status_code,
-            headers=headers,
-            content_type=content_type,
+            headers=headers
         )

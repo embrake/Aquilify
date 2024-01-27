@@ -2,25 +2,36 @@
 
 # LICENCED BY AQUILIFY
 
-import jinja2
+try:
+    import jinja2
+    if hasattr(jinja2, "pass_context"):
+        pass_context = jinja2.pass_context
+    else:  # pragma: nocover
+        pass_context = jinja2.contextfunction  # type: ignore[attr-defined]
+except ModuleNotFoundError:  # pragma: nocover
+    jinja2 = None  # type: ignore[assignment]
+    
+import typing
 
-from .template import Jinja2Templates
-from .responses import RedirectResponse
+from aquilify.template.jinja2 import Jinja2Template
+from aquilify.template.xenarx import XenarxTemplate
+from aquilify.responses import RedirectResponse
+from aquilify.template.builder import TemplateFactory
+from aquilify.wrappers import Request
 
 from aquilify.settings import settings
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 
 async def render(
-    request,
+    request: Request,
     template_name: str,
-    context: Optional[Dict[str, Any]] = None,
+    context: typing.Optional[typing.Dict[str, typing.Any]] = None,
     status_code: int = 200,
-    headers: Optional[Dict[str, str]] = None,
-    content_type: Optional[str] = None
-) -> Jinja2Templates:
+    headers: typing.Optional[typing.Mapping[str, str]] = None
+) -> Union[XenarxTemplate, Jinja2Template]:
     """
-    Renders a template using Jinja2Templates and returns a Response object.
+    Renders a template using Union[XenarxTemplate, Jinja2Template] and returns a Response object.
 
     Example:
        ```python
@@ -50,15 +61,17 @@ async def render(
 
     
     """
-    templates = Jinja2Templates()
     try:
-        return await templates.TemplateResponse(
+        base = TemplateFactory.create_template()
+        
+        response = await base.render(
+            request,
             template_name,
-            {"request": request, **(context or {})},
-            status_code=status_code,
-            headers=headers,
-            content_type=content_type
+            context,
+            status_code,
+            headers
         )
+        return response
     except Exception as e:
         raise e
     
@@ -128,8 +141,7 @@ async def redirect(
     query_params: Optional[Dict[str, str]] = None,
     anchor: Optional[str] = None,
     delay: int = 0,
-    content: Optional[str] = None,
-    secure_headers: bool = False
+    content: Optional[str] = None
 ) -> RedirectResponse:
     """
     Constructs a RedirectResponse object to redirect to the provided URL with specified parameters.
@@ -142,7 +154,6 @@ async def redirect(
         anchor (Optional[str]): The anchor to append to the URL.
         delay (int): Delay in seconds before the redirection (default: 0).
         content (Optional[str]): Content for the redirection response body.
-        secure_headers (bool): Flag to add security headers (default: False).
 
     Returns:
         RedirectResponse: RedirectResponse object.
@@ -154,6 +165,5 @@ async def redirect(
         query_params=query_params,
         anchor=anchor,
         delay=delay,
-        content=content,
-        secure_headers=secure_headers
+        content=content
     )

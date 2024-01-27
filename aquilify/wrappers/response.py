@@ -7,8 +7,8 @@ import io
 
 from typing import Optional, List, Union, Callable, Type, Any, Dict
 from datetime import datetime, timedelta
-from ..exception.__handler import handle_exception
-from ._http_status import HTTP_STATUS_PHRASE
+from aquilify.exception.__handler import handle_exception
+from aquilify.wrappers._http_status import HTTP_STATUS_PHRASE
 
 class HTTPStatus:
     def __init__(self, code: int, phrase: str):

@@ -51,8 +51,8 @@ class TemplateConfigSettings:
         }
 
     def _get_backend(self, template: dict) -> str:
-        backend = template.get('BACKEND', [])
-        return backend[0] if backend else ""
+        backend = template.get('BACKEND')
+        return backend if backend else ""
 
     def _get_dirs(self, template: dict) -> list:
         dirs = template.get('DIRS', [])

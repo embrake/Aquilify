@@ -64,6 +64,7 @@ class TemplateResponse:
                 loader=loader,
                 autoescape=select_autoescape(['html', 'xml']) if self.autoescape else False,
                 cache_size=self.cache_size if self.enable_template_cache else 0,
+     
                 extensions=self.custom_extensions,
             )
             environment.filters.update(self.custom_filters)

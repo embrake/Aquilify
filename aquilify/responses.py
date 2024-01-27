@@ -22,15 +22,9 @@ import io
 import time
 import json
 import hashlib
-import typing
-import anyio
 
 from datetime import datetime, timedelta
 from mimetypes import MimeTypes
-from functools import partial
-
-from aquilify.utils.concurrency import iterate_in_threadpool
-from aquilify.types import Scope, Receive, Send
 
 class PlainTextResponse(BaseResponse):
     def __init__(
@@ -87,6 +81,17 @@ class JsonResponse(BaseResponse):
 
         super().__init__(json.dumps(content, ensure_ascii=False), status, headers)
         self.headers.setdefault('Content-Type', f'{content_type}; charset={encoding}')
+        
+    def __str__(self) -> str:
+        return self.content
+    
+    def __repr__(self) -> str:
+        return "JsonResponse(content = %s, status = %s, headers = %s, encoding = %s)" %(
+            self.content,
+            self.status_code,
+            self.headers,
+            self.encoding
+        )
 
 class HTMLResponse(BaseResponse):
     def __init__(
@@ -112,6 +117,9 @@ class HTMLResponse(BaseResponse):
         self.headers.setdefault('Content-Type', f'{content_type}; charset={encoding}')
         
     def __str__(self):
+        return f"HTMLResponse: Status={self.status_code}, Content-Type={self.content_type}, Content-Length={len(self.content)}"
+    
+    def __repr__(self) -> str:
         return f"HTMLResponse: Status={self.status_code}, Content-Type={self.content_type}, Content-Length={len(self.content)}"
 
 class RedirectResponse(BaseResponse):
@@ -167,61 +175,6 @@ class RedirectResponse(BaseResponse):
         return urlunsplit(
             (parsed_url.scheme, parsed_url.netloc, parsed_url.path, parsed_url.query, parsed_url.fragment)
         )
-        
-Content = typing.Union[str, bytes]
-SyncContentStream = typing.Iterable[Content]
-AsyncContentStream = typing.AsyncIterable[Content]
-ContentStream = typing.Union[AsyncContentStream, SyncContentStream]
-
-class StreamingResponse(BaseResponse):
-    body_iterator: AsyncContentStream
-
-    def __init__(
-        self,
-        content: ContentStream,
-        status_code: int = 200,
-        headers: typing.Optional[typing.Mapping[str, str]] = None,
-        content_type: typing.Optional[str] = None,
-    ) -> None:
-        if isinstance(content, typing.AsyncIterable):
-            self.body_iterator = content
-        else:
-            self.body_iterator = iterate_in_threadpool(content)
-        self.status_code = status_code
-        self.content_type = self.content_type if content_type is None else content_type
-        
-        super().__init__(content, status_code, headers, content_type)
-
-    async def listen_for_disconnect(self, receive: Receive) -> None:
-        while True:
-            message = await receive()
-            if message["type"] == "http.disconnect":
-                break
-
-    async def stream_response(self, send: Send) -> None:
-        await send(
-            {
-                "type": "http.response.start",
-                "status": self.status_code,
-                "headers": self.headers,
-            }
-        )
-        async for chunk in self.body_iterator:
-            if not isinstance(chunk, bytes):
-                chunk = chunk.encode(self.encoding)
-            await send({"type": "http.response.body", "body": chunk, "more_body": True})
-
-        await send({"type": "http.response.body", "body": b"", "more_body": False})
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        async with anyio.create_task_group() as task_group:
-
-            async def wrap(func: "typing.Callable[[], typing.Awaitable[None]]") -> None:
-                await func()
-                task_group.cancel_scope.cancel()
-
-            task_group.start_soon(wrap, partial(self.stream_response, send))
-            await wrap(partial(self.listen_for_disconnect, receive))
     
 
 class FileResponse(BaseResponse):

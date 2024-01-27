@@ -1,0 +1,2 @@
+class AXTokenException(Exception):
+    pass

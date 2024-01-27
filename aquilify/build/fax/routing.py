@@ -1,6 +1,6 @@
 ROUTING = """from aquilify.core.routing import rule
 
-ROUTER configuration.
+# ROUTER configuration.
 
 # The `ROUTER` list routes URLs to views.
 # Examples:
